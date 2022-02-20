@@ -39,19 +39,31 @@ impl SetList {
         }
         Ok(SetList {content: slv})
     }
+
+    fn iter(self: &Self) -> std::slice::Iter<SetList> {
+        return self.content.iter();
+    }
+
+    fn len(self: &Self) -> usize {
+        return self.content.len();
+    }
+
+    fn is_empty(self: &Self) -> bool {
+        return self.content.is_empty();
+    }
     
     fn copy(self: &Self) -> SetList {
-        return SetList {content: self.content.iter().map(|x| x.copy()).collect()};
+        return SetList {content: self.iter().map(|x| x.copy()).collect()};
     }
 
     // 一意化及びソートを行う
     fn uniquify(self: &Self) -> Set {
-        if self.content.is_empty() {
+        if self.is_empty() {
             return Set {content: Vec::new()};
         }
 
         // まず，各要素をuniquify
-        let mut sv: Vec<Set> = self.content.iter().map(|x| x.uniquify()).collect();
+        let mut sv: Vec<Set> = self.iter().map(|x| x.uniquify()).collect();
 
         // ソート
         sv.sort_by(set_cmp);
@@ -71,10 +83,10 @@ impl SetList {
     }
 
     fn to_string(self: &Self) -> String {
-        if self.content.is_empty() {
+        if self.is_empty() {
             return "{}".to_string();
         }
-        let str_ls: Vec<String> = self.content.iter().map(|x| x.to_string()).collect();
+        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
         let mut ret = String::new();
         for s in str_ls {
             ret = format!("{},{}", ret, s);
@@ -94,15 +106,27 @@ impl Set {
         return Ok(sl.uniquify());
     }
 
+    fn iter(self: &Self) -> std::slice::Iter<Set> {
+        return self.content.iter();
+    }
+
+    fn len(self: &Self) -> usize {
+        return self.content.len();
+    }
+
+    fn is_empty(self: &Self) -> bool {
+        return self.content.is_empty();
+    }
+
     fn copy(self: &Self) -> Set {
-        return Set {content: self.content.iter().map(|x| x.copy()).collect()};
+        return Set {content: self.iter().map(|x| x.copy()).collect()};
     }
 
     fn to_string(self: &Self) -> String {
-        if self.content.is_empty() {
+        if self.is_empty() {
             return "{}".to_string();
         }
-        let str_ls: Vec<String> = self.content.iter().map(|x| x.to_string()).collect();
+        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
         let mut ret = String::new();
         for s in str_ls {
             ret = format!("{},{}", ret, s);
@@ -123,16 +147,16 @@ fn peal(s: String) -> Result<String, String> {
 // 一意化・ソート済みのSetListを入力とする
 // 辞書式順序で比較する
 fn set_cmp(a: &Set, b: &Set) -> Ordering {
-    if a.content.is_empty() {
-        if b.content.is_empty() {
+    if a.is_empty() {
+        if b.is_empty() {
             return Ordering::Equal;
         } else {
             return Ordering::Less;
         }
-    } else if b.content.is_empty() {
+    } else if b.is_empty() {
         return Ordering::Greater;
     }
-    let n = std::cmp::min(a.content.len(), b.content.len());
+    let n = std::cmp::min(a.len(), b.len());
     for i in 0..n {
         let tmp = set_cmp(&a.content[i], &b.content[i]);
         if tmp != Ordering::Equal {
@@ -140,9 +164,9 @@ fn set_cmp(a: &Set, b: &Set) -> Ordering {
         }
     }
 
-    if a.content.len() < b.content.len() {
+    if a.len() < b.len() {
         return Ordering::Less;
-    } else if a.content.len() > b.content.len() {
+    } else if a.len() > b.len() {
         return Ordering::Greater;
     } else {
         return Ordering::Equal;
