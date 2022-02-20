@@ -19,6 +19,36 @@ fn main() -> std::io::Result<()> {
     Ok(())
 }
 
+const KEYWORD_LIST: Vec<&str> = vec!["in", "size", "is_empty"];
+const SYMBOL_LIST: Vec<&str> = vec!["{", "}"];
+
+enum Token {
+    SetToken(Set),
+    KeywordToken(String),
+    SymbolToken(String),
+    IdentifierToken(String),
+}
+
+impl Token {
+    fn keyword_from_string(s: String) -> Option<Token> {
+        for t in KEYWORD_LIST {
+            if s == t.to_string() {
+                return Some(Token::KeywordToken(s));
+            }
+        }
+        return None;
+    }
+
+    fn symbol_from_string(s: String) -> Option<Token> {
+        for t in SYMBOL_LIST {
+            if s == t.to_string() {
+                return Some(Token::SymbolToken(s));
+            }
+        }
+        return None;
+    }
+}
+
 struct SetList {
     content: Vec<SetList>,
 }
