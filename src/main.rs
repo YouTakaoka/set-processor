@@ -25,22 +25,19 @@ struct SetList {
 
 impl SetList {
     fn create(s: String) -> Result<SetList, String> {
-        match peal(s) {
-            Ok(pealed) => {
-                if pealed == "" {
-                    return Ok(SetList {content: Vec::new()});
-                };
-                let mut slv: Vec<SetList> = Vec::new();
-                for t in pealed.split(',') {
-                    match SetList::create(t.to_string()) {
-                        Err(e) => return Err(e.to_string()),
-                        Ok(sl) => slv.push(sl),
-                    }
-                };
-                Ok(SetList {content: slv})
-            },
-            Err(e) => Err(e),
+        let pealed = peal(s)?;
+        if pealed == "" {
+            return Ok(SetList {content: Vec::new()});
+        };
+        let resv: Vec<Result<SetList, String>> = pealed.split(',').map(String::from).map(SetList::create).collect();
+        let mut slv: Vec<SetList> = Vec::new();
+        for res in resv.iter() {
+            match res {
+                Ok(sl) => slv.push(sl.copy()),
+                Err(e) => return Err(e.to_string()),
+            }
         }
+        Ok(SetList {content: slv})
     }
     
     fn copy(self: &Self) -> SetList {
