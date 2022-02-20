@@ -12,7 +12,7 @@ fn main() -> std::io::Result<()> {
             continue;
         }
         match Set::create(buffer) {
-            Ok(set) => println!("{}, {}", set.to_string(), set.content.len()),
+            Ok(set) => println!("{}", set.to_string()),
             Err(e) => println!("Error: {}", e),
         }
     }
