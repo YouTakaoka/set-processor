@@ -47,6 +47,44 @@ impl Token {
         }
         return None;
     }
+
+    fn token_from_string(s: String) -> Option<Token> {
+        for f in vec![Token::keyword_from_string, Token::symbol_from_string] {
+            match f(s) {
+                None => (),
+                Some(t) => return Some(t),
+            }
+        }
+        return None;
+    }
+
+    fn read_token(s: String) -> Option<(Token, String)> {
+        let mut s1: String = String::new();
+        let mut s2: String = String::new();
+        loop {
+            let (c, tmp) = read_char(s2)?;
+            s2 = tmp;
+            if c == ' ' {
+                break;
+            }
+            s1.push(c);
+            match Token::symbol_from_string(s1) {
+                None => (),
+                Some(symbol) => return Some((symbol, s2)),
+            }
+        }
+        let t: Token = Token::token_from_string(s1)?;
+        return Some((t, s2));
+    }
+}
+
+fn read_char(s: String) -> Option<(char, String)> {
+    if s == "".to_string() {
+        return None;
+    }
+    let mut s2 = s.clone();
+    let c: char = s2.remove(0);
+    return Some((c, s2));
 }
 
 struct SetList {
