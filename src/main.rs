@@ -25,7 +25,7 @@ fn main() -> std::io::Result<()> {
 }
 
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
-const SYMBOL_LIST: [&str; 3] = ["{", "}", ","];
+const SYMBOL_LIST: [&str; 4] = [" ", "{", "}", ","];
 
 #[derive(Clone, PartialEq)]
 enum Token {
@@ -68,16 +68,13 @@ impl Token {
         let mut s1: String = String::new();
         let mut s2: String = s.clone();
         loop {
-            let (c, tmp) = read_char(s2)?;
-            s2 = tmp;
-            if c == ' ' {
-                if s1.is_empty() {
-                    continue;
-                }
-                let t: Token = Self::token_from_string(s1.clone())?;
-                return Some((t, s2));
+            let (c, tmp) = read_char(s2.clone())?;
+            if c == ' ' && !s1.is_empty() {
+                return Some((Token::token_from_string(s1)?, s2));
             }
+            s2 = tmp;
             s1.push(c);
+
             match Self::symbol_from_string(s1.clone()) {
                 None => continue,
                 Some(symbol) => return Some((symbol, s2)),
@@ -145,6 +142,13 @@ impl SetList {
             if tv1.is_empty() {
                 return Err("Curly brace is not closed.".to_string());
             }
+            while tv1[0] == Token::SymbolToken(" ".to_string()) {
+                tv1.remove(0);
+                if tv1.is_empty() {
+                    return Err("Curly brace is not closed.".to_string());
+                }
+            }
+
             if tv1[0] == Token::SymbolToken("}".to_string()) {
                 tv1.remove(0);  // remove "}"
                 return Ok((SetList {content: content}, tv1));
@@ -152,8 +156,15 @@ impl SetList {
             let (sl, tv2) = Self::create(tv1)?;
             tv1 = tv2;
             content.push(sl.copy());
+            
             if tv1.is_empty() {
                 return Err("Curly brace is not closed.".to_string());
+            }
+            while tv1[0] == Token::SymbolToken(" ".to_string()) {
+                tv1.remove(0);
+                if tv1.is_empty() {
+                    return Err("Curly brace is not closed.".to_string());
+                }
             }
             if tv1[0] == Token::SymbolToken(",".to_string()) {
                 tv1.remove(0);
@@ -282,14 +293,6 @@ impl PartialEq for Set {
     fn ne(self: &Self, other: &Self) -> bool {
         return set_cmp(self, other) != Ordering::Equal;
     }
-}
-
-fn peal(s: String) -> Result<String, String> {
-    let mut r = s.clone();
-    if r.remove(0) != '{' || r.pop() != Some('}') {
-       return Err("Irregal input.".to_string());
-    }
-    return Ok(r);
 }
 
 // 一意化・ソート済みのSetListを入力とする
