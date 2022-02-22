@@ -11,16 +11,16 @@ fn main() -> std::io::Result<()> {
         if buffer.is_empty() {
             continue;
         }
-        match Set::create(buffer) {
-            Ok(set) => println!("{}", set.to_string()),
-            Err(e) => println!("Error: {}", e),
+        match Token::tokenize(buffer) {
+            Some(tv) => println!("{}", Token::token_vec_to_string(tv)),
+            None => println!("Error!"),
         }
     }
     Ok(())
 }
 
-const KEYWORD_LIST: Vec<&str> = vec!["in", "size", "is_empty"];
-const SYMBOL_LIST: Vec<&str> = vec!["{", "}"];
+const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
+const SYMBOL_LIST: [&str; 2] = ["{", "}"];
 
 enum Token {
     SetToken(Set),
@@ -49,8 +49,8 @@ impl Token {
     }
 
     fn token_from_string(s: String) -> Option<Token> {
-        for f in vec![Self::keyword_from_string, Self::symbol_from_string] {
-            match f(s) {
+        for f in [Self::keyword_from_string, Self::symbol_from_string] {
+            match f(s.clone()) {
                 None => (),
                 Some(t) => return Some(t),
             }
@@ -68,11 +68,11 @@ impl Token {
                 if s1.is_empty() {
                     continue;
                 }
-                let t: Token = Self::token_from_string(s1)?;
+                let t: Token = Self::token_from_string(s1.clone())?;
                 return Some((t, s2));
             }
             s1.push(c);
-            match Self::symbol_from_string(s1) {
+            match Self::symbol_from_string(s1.clone()) {
                 None => continue,
                 Some(symbol) => return Some((symbol, s2)),
             }
@@ -97,6 +97,16 @@ impl Token {
             Self::KeywordToken(s) => s.to_string(),
             Self::IdentifierToken(s) => s.to_string(),
         }
+    }
+
+    fn token_vec_to_string(tv: Vec<Token>) -> String {
+        let mut s = "[".to_string();
+        for token in tv {
+            s = format!("{}'{}',", s, token.to_string());
+        }
+        s.pop();
+        s.push(']');
+        return s;
     }
 }
 
