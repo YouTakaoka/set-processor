@@ -8,7 +8,7 @@ fn main() -> std::io::Result<()> {
         if buffer == "exit" {
             break;
         }
-        if buffer == "" {
+        if buffer.is_empty() {
             continue;
         }
         match Set::create(buffer) {
@@ -33,7 +33,7 @@ impl Token {
     fn keyword_from_string(s: String) -> Option<Token> {
         for t in KEYWORD_LIST {
             if s == t.to_string() {
-                return Some(Token::KeywordToken(s));
+                return Some(Self::KeywordToken(s));
             }
         }
         return None;
@@ -42,14 +42,14 @@ impl Token {
     fn symbol_from_string(s: String) -> Option<Token> {
         for t in SYMBOL_LIST {
             if s == t.to_string() {
-                return Some(Token::SymbolToken(s));
+                return Some(Self::SymbolToken(s));
             }
         }
         return None;
     }
 
     fn token_from_string(s: String) -> Option<Token> {
-        for f in vec![Token::keyword_from_string, Token::symbol_from_string] {
+        for f in vec![Self::keyword_from_string, Self::symbol_from_string] {
             match f(s) {
                 None => (),
                 Some(t) => return Some(t),
@@ -60,26 +60,48 @@ impl Token {
 
     fn read_token(s: String) -> Option<(Token, String)> {
         let mut s1: String = String::new();
-        let mut s2: String = String::new();
+        let mut s2: String = s.clone();
         loop {
             let (c, tmp) = read_char(s2)?;
             s2 = tmp;
             if c == ' ' {
-                break;
+                if s1.is_empty() {
+                    continue;
+                }
+                let t: Token = Self::token_from_string(s1)?;
+                return Some((t, s2));
             }
             s1.push(c);
-            match Token::symbol_from_string(s1) {
-                None => (),
+            match Self::symbol_from_string(s1) {
+                None => continue,
                 Some(symbol) => return Some((symbol, s2)),
             }
         }
-        let t: Token = Token::token_from_string(s1)?;
-        return Some((t, s2));
+    }
+
+    fn tokenize(string: String) -> Option<Vec<Token>> {
+        let mut s1 = string.clone();
+        let mut tv: Vec<Token> = Vec::new();
+        while !s1.is_empty() {
+            let (token, s) = Self::read_token(s1)?;
+            s1 = s;
+            tv.push(token);
+        }
+        return Some(tv);
+    }
+
+    fn to_string(self: &Self) -> String {
+        match self {
+            Self::SetToken(set) => set.to_string(),
+            Self::SymbolToken(s) => s.to_string(),
+            Self::KeywordToken(s) => s.to_string(),
+            Self::IdentifierToken(s) => s.to_string(),
+        }
     }
 }
 
 fn read_char(s: String) -> Option<(char, String)> {
-    if s == "".to_string() {
+    if s.is_empty() {
         return None;
     }
     let mut s2 = s.clone();
@@ -94,7 +116,7 @@ struct SetList {
 impl SetList {
     fn create(s: String) -> Result<SetList, String> {
         let pealed = peal(s)?;
-        if pealed == "" {
+        if pealed.is_empty() {
             return Ok(SetList {content: Vec::new()});
         };
         let resv: Vec<Result<SetList, String>> = pealed.split(',').map(String::from).map(SetList::create).collect();
