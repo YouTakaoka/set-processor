@@ -12,7 +12,12 @@ fn main() -> std::io::Result<()> {
             continue;
         }
         match Token::tokenize(buffer) {
-            Some(tv) => println!("{}", Token::token_vec_to_string(tv)),
+            Some(tv) => {
+                match Set::parse_all_sets(tv) {
+                    Ok(tv1) => println!("{}", Token::token_vec_to_string(tv1)),
+                    Err(e) => println!("{}", e),
+                }
+            },
             None => println!("Error!"),
         }
     }
@@ -20,8 +25,9 @@ fn main() -> std::io::Result<()> {
 }
 
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
-const SYMBOL_LIST: [&str; 2] = ["{", "}"];
+const SYMBOL_LIST: [&str; 3] = ["{", "}", ","];
 
+#[derive(Clone, PartialEq)]
 enum Token {
     SetToken(Set),
     KeywordToken(String),
@@ -124,20 +130,35 @@ struct SetList {
 }
 
 impl SetList {
-    fn create(s: String) -> Result<SetList, String> {
-        let pealed = peal(s)?;
-        if pealed.is_empty() {
-            return Ok(SetList {content: Vec::new()});
-        };
-        let resv: Vec<Result<SetList, String>> = pealed.split(',').map(String::from).map(SetList::create).collect();
-        let mut slv: Vec<SetList> = Vec::new();
-        for res in resv.iter() {
-            match res {
-                Ok(sl) => slv.push(sl.copy()),
-                Err(e) => return Err(e.to_string()),
+    fn create(tv: Vec<Token>) -> Result<(SetList, Vec<Token>), String> {
+        if tv.is_empty() {
+            panic!("SetList::create: Got empty vector.");
+        }
+        let mut tv1: Vec<Token> = tv.clone();
+        let t0 = tv1.remove(0);
+        if t0 != Token::SymbolToken("{".to_string()) {
+            return Err("Parse error of set literal.".to_string());
+        }
+
+        let mut content: Vec<SetList> = Vec::new();
+        loop {
+            if tv1.is_empty() {
+                return Err("Curly brace is not closed.".to_string());
+            }
+            if tv1[0] == Token::SymbolToken("}".to_string()) {
+                tv1.remove(0);  // remove "}"
+                return Ok((SetList {content: content}, tv1));
+            }
+            let (sl, tv2) = Self::create(tv1)?;
+            tv1 = tv2;
+            content.push(sl.copy());
+            if tv1.is_empty() {
+                return Err("Curly brace is not closed.".to_string());
+            }
+            if tv1[0] == Token::SymbolToken(",".to_string()) {
+                tv1.remove(0);
             }
         }
-        Ok(SetList {content: slv})
     }
 
     fn iter(self: &Self) -> std::slice::Iter<SetList> {
@@ -169,13 +190,13 @@ impl SetList {
         sv.sort_by(set_cmp);
 
         // 一意化
-        let mut tmp = sv[0].copy();
+        let mut tmp = sv[0].clone();
         let mut sv_ret :Vec<Set> = Vec::new();
-        sv_ret.push(tmp.copy());
+        sv_ret.push(tmp.clone());
         for i in 1..sv.len() {
             if set_cmp(&sv[i], &tmp) != Ordering::Equal {
-                sv_ret.push(sv[i].copy());
-                tmp = sv[i].copy();
+                sv_ret.push(sv[i].clone());
+                tmp = sv[i].clone();
             }
         }
 
@@ -201,9 +222,9 @@ struct Set {
 }
 
 impl Set {
-    fn create(s: String) -> Result<Set, String> {
-        let sl: SetList = SetList::create(s)?;
-        return Ok(sl.uniquify());
+    fn create(tv: Vec<Token>) -> Result<(Set, Vec<Token>), String> {
+        let (sl, tv1) = SetList::create(tv)?;
+        return Ok((sl.uniquify(), tv1));
     }
 
     fn iter(self: &Self) -> std::slice::Iter<Set> {
@@ -218,10 +239,6 @@ impl Set {
         return self.content.is_empty();
     }
 
-    fn copy(self: &Self) -> Set {
-        return Set {content: self.iter().map(|x| x.copy()).collect()};
-    }
-
     fn to_string(self: &Self) -> String {
         if self.is_empty() {
             return "{}".to_string();
@@ -233,6 +250,37 @@ impl Set {
         }
         ret.remove(0);
         return format!("{{{}}}", ret);
+    }
+
+    fn parse_all_sets(tv: Vec<Token>) -> Result<Vec<Token>, String> {
+        let mut tv1 = tv.clone();
+        let mut tv2 = Vec::new();
+        while !tv1.is_empty() {
+            if tv1[0] == Token::SymbolToken("{".to_string()) {
+                let (set, tv3) = Self::create(tv1)?;
+                tv1 = tv3;
+                tv2.push(Token::SetToken(set));
+            } else {
+                tv2.push(tv1.remove(0));
+            }
+        }
+        return Ok(tv2);
+    }
+}
+
+impl Clone for Set {
+    fn clone(self: &Self) -> Set {
+        return Set {content: self.iter().map(|x| x.clone()).collect()};
+    }
+}
+
+impl PartialEq for Set {
+    fn eq(self: &Self, other: &Self) -> bool {
+        return set_cmp(self, other) == Ordering::Equal;
+    }
+
+    fn ne(self: &Self, other: &Self) -> bool {
+        return set_cmp(self, other) != Ordering::Equal;
     }
 }
 
