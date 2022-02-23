@@ -11,21 +11,16 @@ fn main() -> std::io::Result<()> {
         if buffer.is_empty() {
             continue;
         }
-        match Token::tokenize(buffer) {
-            Some(tv) => {
-                match Set::parse_all_sets(tv) {
-                    Ok(tv1) => println!("{}", Token::token_vec_to_string(tv1)),
-                    Err(e) => println!("{}", e),
-                }
-            },
-            None => println!("Error!"),
+        match PurifiedTokenList::from_string(buffer) {
+            Ok(ptl) => println!("{}", ptl.to_string()),
+            Err(e) => println!("{}", e),
         }
     }
     Ok(())
 }
 
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
-const SYMBOL_LIST: [&str; 4] = [" ", "{", "}", ","];
+const SYMBOL_LIST: [&str; 6] = [" ", "{", "}", ",", "+", "*"];
 
 #[derive(Clone, PartialEq)]
 enum Token {
@@ -102,7 +97,7 @@ impl Token {
         }
     }
 
-    fn token_vec_to_string(tv: Vec<Token>) -> String {
+    fn tokenv_to_string(tv: &Vec<Token>) -> String {
         let mut s = "[".to_string();
         for token in tv {
             s = format!("{}'{}',", s, token.to_string());
@@ -110,6 +105,53 @@ impl Token {
         s.pop();
         s.push(']');
         return s;
+    }
+}
+
+struct PurifiedTokenList {
+    content: Vec<Token>,
+}
+
+impl PurifiedTokenList {
+    fn from_tokenv(tv: Vec<Token>) -> Result<Self, String> {
+        let mut tv1: Vec<Token> = Vec::new();
+
+        let mut previous_is_set = false; // 連続したSetを判定するためのフラグ
+        for token in tv {
+            // '}'があったらError
+            if token == Token::SymbolToken("}".to_string()) {
+                return Err("Curly brace is not closed.".to_string());
+            }
+
+            // 連続したSetがあったらError
+            match token {
+                Token::SetToken(_) => {
+                    if previous_is_set {
+                        return Err("Parse error: Two contiguous set literals without any spaces between them.".to_string());
+                    }
+                    previous_is_set = true; // フラグを更新
+                },
+                _ => { previous_is_set = false; }, // フラグを更新
+            }
+            
+            // tokenがスペースでない限り追加
+            if token != Token::SymbolToken(" ".to_string()) {
+                tv1.push(token);
+            }
+        }
+
+        return Ok(PurifiedTokenList {content: tv1});
+    }
+
+    fn from_string(s: String) -> Result<Self, String> {
+        match Token::tokenize(s) {
+            Some(tv) => Ok(Self::from_tokenv(Set::parse_all_sets(tv)?)?),
+            None => Err("Parse error.".to_string()),
+        }
+    }
+
+    fn to_string(self: &Self) -> String {
+        return Token::tokenv_to_string(&self.content);
     }
 }
 
