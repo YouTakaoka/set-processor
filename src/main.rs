@@ -64,7 +64,9 @@ impl Token {
         let mut s2: String = s.clone();
         loop {
             let (c, tmp) = read_char(s2.clone())?;
-            if c == ' ' && !s1.is_empty() {
+
+            // tokenが途切れていれば一旦返す
+            if (c == ' ' || c == '}') && !s1.is_empty() {
                 return Some((Token::token_from_string(s1)?, s2));
             }
             s2 = tmp;
