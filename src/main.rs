@@ -77,15 +77,18 @@ impl Token {
         }
     }
 
-    fn tokenize(string: String) -> Option<Vec<Token>> {
+    fn tokenize(string: String) -> Result<Vec<Token>, String> {
         let mut s1 = string.clone();
         let mut tv: Vec<Token> = Vec::new();
         while !s1.is_empty() {
-            let (token, s) = Self::read_token(s1)?;
+            let (token, s) = match Self::read_token(s1) {
+                Some(touple) => touple,
+                None => return Err("Parse error.".to_string()),
+            };
             s1 = s;
             tv.push(token);
         }
-        return Some(tv);
+        return Ok(tv);
     }
 
     fn to_string(self: &Self) -> String {
@@ -144,10 +147,7 @@ impl PurifiedTokenList {
     }
 
     fn from_string(s: String) -> Result<Self, String> {
-        match Token::tokenize(s) {
-            Some(tv) => Ok(Self::from_tokenv(Set::parse_all_sets(tv)?)?),
-            None => Err("Parse error.".to_string()),
-        }
+        return Ok(Self::from_tokenv(Set::parse_all_sets(Token::tokenize(s)?)?)?);
     }
 
     fn to_string(self: &Self) -> String {
@@ -240,14 +240,14 @@ impl SetList {
         let mut sv: Vec<Set> = self.iter().map(|x| x.uniquify()).collect();
 
         // ソート
-        sv.sort_by(set_cmp);
+        sv.sort_by(Set::cmp);
 
         // 一意化
         let mut tmp = sv[0].clone();
         let mut sv_ret :Vec<Set> = Vec::new();
         sv_ret.push(tmp.clone());
         for i in 1..sv.len() {
-            if set_cmp(&sv[i], &tmp) != Ordering::Equal {
+            if Set::cmp(&sv[i], &tmp) != Ordering::Equal {
                 sv_ret.push(sv[i].clone());
                 tmp = sv[i].clone();
             }
@@ -292,6 +292,35 @@ impl Set {
         return self.content.is_empty();
     }
 
+    // 一意化・ソート済みのSetListを入力とする
+    // 辞書式順序で比較する
+    fn cmp(a: &Set, b: &Set) -> Ordering {
+        if a.is_empty() {
+            if b.is_empty() {
+                return Ordering::Equal;
+            } else {
+                return Ordering::Less;
+            }
+        } else if b.is_empty() {
+            return Ordering::Greater;
+        }
+        let n = std::cmp::min(a.len(), b.len());
+        for i in 0..n {
+            let tmp = Self::cmp(&a.content[i], &b.content[i]);
+            if tmp != Ordering::Equal {
+                return tmp;
+            }
+        }
+
+        if a.len() < b.len() {
+            return Ordering::Less;
+        } else if a.len() > b.len() {
+            return Ordering::Greater;
+        } else {
+            return Ordering::Equal;
+        }
+    }
+
     fn to_string(self: &Self) -> String {
         if self.is_empty() {
             return "{}".to_string();
@@ -329,40 +358,11 @@ impl Clone for Set {
 
 impl PartialEq for Set {
     fn eq(self: &Self, other: &Self) -> bool {
-        return set_cmp(self, other) == Ordering::Equal;
+        return Set::cmp(self, other) == Ordering::Equal;
     }
 
     fn ne(self: &Self, other: &Self) -> bool {
-        return set_cmp(self, other) != Ordering::Equal;
-    }
-}
-
-// 一意化・ソート済みのSetListを入力とする
-// 辞書式順序で比較する
-fn set_cmp(a: &Set, b: &Set) -> Ordering {
-    if a.is_empty() {
-        if b.is_empty() {
-            return Ordering::Equal;
-        } else {
-            return Ordering::Less;
-        }
-    } else if b.is_empty() {
-        return Ordering::Greater;
-    }
-    let n = std::cmp::min(a.len(), b.len());
-    for i in 0..n {
-        let tmp = set_cmp(&a.content[i], &b.content[i]);
-        if tmp != Ordering::Equal {
-            return tmp;
-        }
-    }
-
-    if a.len() < b.len() {
-        return Ordering::Less;
-    } else if a.len() > b.len() {
-        return Ordering::Greater;
-    } else {
-        return Ordering::Equal;
+        return Set::cmp(self, other) != Ordering::Equal;
     }
 }
 
