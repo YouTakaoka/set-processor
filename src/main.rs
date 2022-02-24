@@ -173,10 +173,6 @@ trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
     fn content(self: &Self) -> &Vec<T>;
     fn new(content: Vec<T>) -> T;
 
-    fn copy(self: &Self) -> T {
-        return Self::new(self.content().clone());
-    }   
-
     fn len(self: &Self) -> usize {
         return self.content().len();
     }
@@ -291,26 +287,25 @@ impl SetList {
     }
 }
 
+#[derive(Clone)]
 struct Set {
     content: Vec<Set>,
 }
 
+impl SetLike<Self> for Set {
+    fn new(content: Vec<Self>) -> Self {
+        return Self {content: content};
+    }
+
+    fn content(self: &Self) -> &Vec<Self> {
+        return &self.content;
+    }
+}
+
 impl Set {
-    fn create(tv: Vec<Token>) -> Result<(Set, Vec<Token>), String> {
+    fn from_tokenv(tv: Vec<Token>) -> Result<(Set, Vec<Token>), String> {
         let (sl, tv1) = SetList::from_tokenv(tv)?;
         return Ok((sl.uniquify(), tv1));
-    }
-
-    fn iter(self: &Self) -> std::slice::Iter<Set> {
-        return self.content.iter();
-    }
-
-    fn len(self: &Self) -> usize {
-        return self.content.len();
-    }
-
-    fn is_empty(self: &Self) -> bool {
-        return self.content.is_empty();
     }
 
     // 一意化・ソート済みのSetListを入力とする
@@ -342,25 +337,12 @@ impl Set {
         }
     }
 
-    fn to_string(self: &Self) -> String {
-        if self.is_empty() {
-            return "{}".to_string();
-        }
-        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
-        let mut ret = String::new();
-        for s in str_ls {
-            ret = format!("{},{}", ret, s);
-        }
-        ret.remove(0);
-        return format!("{{{}}}", ret);
-    }
-
     fn parse_all_sets(tv: Vec<Token>) -> Result<Vec<Token>, String> {
         let mut tv1 = tv.clone();
         let mut tv2 = Vec::new();
         while !tv1.is_empty() {
             if tv1[0] == Token::SymbolToken("{".to_string()) {
-                let (set, tv3) = Self::create(tv1)?;
+                let (set, tv3) = Self::from_tokenv(tv1)?;
                 tv1 = tv3;
                 tv2.push(Token::SetToken(set));
             } else {
@@ -368,12 +350,6 @@ impl Set {
             }
         }
         return Ok(tv2);
-    }
-}
-
-impl Clone for Set {
-    fn clone(self: &Self) -> Set {
-        return Set {content: self.iter().map(|x| x.clone()).collect()};
     }
 }
 
