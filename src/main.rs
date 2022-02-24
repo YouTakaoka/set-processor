@@ -62,6 +62,8 @@ impl Token {
     fn read_token(s: String) -> Option<(Token, String)> {
         let mut s1: String = String::new();
         let mut s2: String = s.clone();
+
+        // s1の値がTokenとして解釈できるまでs2の頭文字をpushし続ける
         loop {
             let (c, tmp) = read_char(s2.clone())?;
 
@@ -72,6 +74,7 @@ impl Token {
             s2 = tmp;
             s1.push(c);
 
+            // 記号として解釈できるならスペースなしでも返す
             match Self::symbol_from_string(s1.clone()) {
                 None => continue,
                 Some(symbol) => return Some((symbol, s2)),
