@@ -169,10 +169,9 @@ fn read_char(s: String) -> Option<(char, String)> {
     return Some((c, s2));
 }
 
-trait SetLike<T> {
-    fn content(self: &Self) -> Vec<T>;
-    fn new(content: Vec<T>) -> Self;
-    //fn copy(self: &Self) -> Self;
+trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
+    fn content(self: &Self) -> &Vec<T>;
+    fn new(content: Vec<T>) -> T;
 
     fn copy(self: &Self) -> T {
         return Self::new(self.content().clone());
@@ -210,18 +209,16 @@ struct SetList {
 }
 
 impl SetLike<Self> for SetList {
-    fn content(self: &Self) -> Vec<Self> {
-        return self.content;
-    }
-
-
-}
-
-impl SetList {
     fn new(content: Vec<Self>) -> Self {
         return Self {content: content};
     }
 
+    fn content(self: &Self) -> &Vec<Self> {
+        return &self.content;
+    }
+}
+
+impl SetList {
     fn from_tokenv(tv: Vec<Token>) -> Result<(Self, Vec<Token>), String> {
         if tv.is_empty() {
             panic!("SetList::create: Got empty vector.");
