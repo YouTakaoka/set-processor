@@ -169,12 +169,60 @@ fn read_char(s: String) -> Option<(char, String)> {
     return Some((c, s2));
 }
 
+trait SetLike<T> {
+    fn content(self: &Self) -> Vec<T>;
+    fn new(content: Vec<T>) -> Self;
+    //fn copy(self: &Self) -> Self;
+
+    fn copy(self: &Self) -> T {
+        return Self::new(self.content().clone());
+    }   
+
+    fn len(self: &Self) -> usize {
+        return self.content().len();
+    }
+
+    fn is_empty(self: &Self) -> bool {
+        return self.content().is_empty();
+    }
+    
+    fn to_string(self: &Self) -> String {
+        if self.is_empty() {
+            return "{}".to_string();
+        }
+        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
+        let mut ret = String::new();
+        for s in str_ls {
+            ret = format!("{},{}", ret, s);
+        }
+        ret.remove(0);
+        return format!("{{{}}}", ret);
+    }
+
+    fn iter(self: &Self) -> std::slice::Iter<T> {
+        return self.content().iter();
+    }
+}
+
+#[derive(Clone)]
 struct SetList {
     content: Vec<SetList>,
 }
 
+impl SetLike<Self> for SetList {
+    fn content(self: &Self) -> Vec<Self> {
+        return self.content;
+    }
+
+
+}
+
 impl SetList {
-    fn create(tv: Vec<Token>) -> Result<(SetList, Vec<Token>), String> {
+    fn new(content: Vec<Self>) -> Self {
+        return Self {content: content};
+    }
+
+    fn from_tokenv(tv: Vec<Token>) -> Result<(Self, Vec<Token>), String> {
         if tv.is_empty() {
             panic!("SetList::create: Got empty vector.");
         }
@@ -200,9 +248,9 @@ impl SetList {
                 tv1.remove(0);  // remove "}"
                 return Ok((SetList {content: content}, tv1));
             }
-            let (sl, tv2) = Self::create(tv1)?;
+            let (sl, tv2) = Self::from_tokenv(tv1)?;
             tv1 = tv2;
-            content.push(sl.copy());
+            content.push(sl);
             
             if tv1.is_empty() {
                 return Err("Curly brace is not closed.".to_string());
@@ -217,22 +265,6 @@ impl SetList {
                 tv1.remove(0);
             }
         }
-    }
-
-    fn iter(self: &Self) -> std::slice::Iter<SetList> {
-        return self.content.iter();
-    }
-
-    fn len(self: &Self) -> usize {
-        return self.content.len();
-    }
-
-    fn is_empty(self: &Self) -> bool {
-        return self.content.is_empty();
-    }
-    
-    fn copy(self: &Self) -> SetList {
-        return SetList {content: self.iter().map(|x| x.copy()).collect()};
     }
 
     // 一意化及びソートを行う
@@ -260,19 +292,6 @@ impl SetList {
 
         return Set {content: sv_ret};
     }
-
-    fn to_string(self: &Self) -> String {
-        if self.is_empty() {
-            return "{}".to_string();
-        }
-        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
-        let mut ret = String::new();
-        for s in str_ls {
-            ret = format!("{},{}", ret, s);
-        }
-        ret.remove(0);
-        return format!("{{{}}}", ret);
-    }
 }
 
 struct Set {
@@ -281,7 +300,7 @@ struct Set {
 
 impl Set {
     fn create(tv: Vec<Token>) -> Result<(Set, Vec<Token>), String> {
-        let (sl, tv1) = SetList::create(tv)?;
+        let (sl, tv1) = SetList::from_tokenv(tv)?;
         return Ok((sl.uniquify(), tv1));
     }
 
