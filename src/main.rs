@@ -114,6 +114,20 @@ impl Token {
         s.push(']');
         return s;
     }
+
+    fn check_empty_and_remove_spaces(tv: &Vec<Token>) -> Result<Vec<Token>, String> {
+        let mut tv1 = tv.clone();
+        if tv1.is_empty() {
+            return Err("Curly brace is not closed.".to_string());
+        }
+        while tv1[0] == Token::SymbolToken(" ".to_string()) {
+            tv1.remove(0);
+            if tv1.is_empty() {
+                return Err("Curly brace is not closed.".to_string());
+            }
+        }
+        return Ok(tv1);
+    }
 }
 
 struct PurifiedTokenList {
@@ -227,15 +241,7 @@ impl SetList {
 
         let mut content: Vec<SetList> = Vec::new();
         loop {
-            if tv1.is_empty() {
-                return Err("Curly brace is not closed.".to_string());
-            }
-            while tv1[0] == Token::SymbolToken(" ".to_string()) {
-                tv1.remove(0);
-                if tv1.is_empty() {
-                    return Err("Curly brace is not closed.".to_string());
-                }
-            }
+            tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
 
             if tv1[0] == Token::SymbolToken("}".to_string()) {
                 tv1.remove(0);  // remove "}"
@@ -245,15 +251,7 @@ impl SetList {
             tv1 = tv2;
             content.push(sl);
             
-            if tv1.is_empty() {
-                return Err("Curly brace is not closed.".to_string());
-            }
-            while tv1[0] == Token::SymbolToken(" ".to_string()) {
-                tv1.remove(0);
-                if tv1.is_empty() {
-                    return Err("Curly brace is not closed.".to_string());
-                }
-            }
+            tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
             if tv1[0] == Token::SymbolToken(",".to_string()) {
                 tv1.remove(0);
             }
