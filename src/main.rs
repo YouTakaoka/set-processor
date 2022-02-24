@@ -106,12 +106,14 @@ impl Token {
     }
 
     fn tokenv_to_string(tv: &Vec<Token>) -> String {
-        let mut s = "[".to_string();
+        let mut s = "".to_string();
         for token in tv {
             s = format!("{}'{}',", s, token.to_string());
         }
-        s.pop();
-        s.push(']');
+        if !s.is_empty() {
+            s.pop();
+        }
+        s = format!("[{}]", s);
         return s;
     }
 
