@@ -66,14 +66,15 @@ impl<'a> Token<'a> {
         // s1の値がTokenとして解釈できるまでs2の頭文字をpushし続ける
         loop {
             let (c, tmp) = read_char(s2.clone())?;
-
-            // 記号として解釈できるなら返す
+            
             match Self::symbol_from_char(c) {
                 None => (),
-                Some(symbol) => {
+                Some(symbol) => {  // cが記号として解釈できるなら...
                     if s1.is_empty() {
+                        // s1が空ならばsymbolを記号として返す
                         return Some((symbol, tmp));
                     } else {
+                        // s1が空でないなら一旦s1をトークンとして返す
                         return Some((Token::token_from_string(&s1)?, s2));
                     }
                 },
@@ -142,22 +143,23 @@ impl<'a> PurifiedTokenList<'a> {
     fn from_tokenv(tv: Vec<Token<'a>>) -> Result<Self, String> {
         let mut tv1: Vec<Token> = Vec::new();
 
-        let mut previous_is_set = false; // 連続したSetを判定するためのフラグ
+        let mut previous_is_not_symbol = false; // 連続したnon-symbol tokenを判定するためのフラグ
         for token in tv {
             // '}'があったらError
             if token == Token::SymbolToken('}') {
                 return Err("Curly brace is not closed.".to_string());
             }
 
-            // 連続したSetがあったらError
+            // 連続したnon-symbol tokenがあったらError
             match token {
-                Token::SetToken(_) => {
-                    if previous_is_set {
-                        return Err("Parse error: Two contiguous set literals without any spaces between them.".to_string());
+                Token::SymbolToken(_) => previous_is_not_symbol = false,  // フラグを更新
+                _ => {
+                    if previous_is_not_symbol {
+                        return Err("Parse error: Found two contiguous non-symbol tokens without any spaces between them.".to_string());
+                    } else {
+                        previous_is_not_symbol = true; // フラグを更新
                     }
-                    previous_is_set = true; // フラグを更新
                 },
-                _ => { previous_is_set = false; }, // フラグを更新
             }
             
             // tokenがスペースでない限り追加
