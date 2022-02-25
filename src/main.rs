@@ -35,7 +35,32 @@ enum Token {
     BoolToken(bool),
 }
 
+enum TokenType {
+    SetToken,
+    KeywordToken,
+    SymbolToken,
+    IdentifierToken,
+    BoolToken,
+}
+
 impl Token {
+    fn get_type(&self) -> TokenType {
+        match self {
+            Token::SetToken(_) => TokenType::SetToken,
+            Token::KeywordToken(_) => TokenType::KeywordToken,
+            Token::SymbolToken(_) => TokenType::SymbolToken,
+            Token::IdentifierToken(_) => TokenType::IdentifierToken,
+            Token::BoolToken(_) => TokenType::BoolToken,
+        }
+    }
+
+    fn to_set(&self, mes: &String) -> Result<&Set, String> {
+        match self {
+            Token::SetToken(set) => Ok(set),
+            _ => Err(mes.clone()),
+        }
+    }
+
     fn split_by_token(string: &String) -> Option<(String, Token, String)> {
         // Symbolから順番にtokenを探してsplitしていく
         for symbol in SYMBOL_LIST {
@@ -119,7 +144,9 @@ impl Token {
 }
 
 struct BinaryOp {
+    name: String,
     f: Box<dyn Fn(Token, Token) -> Result<Token, String>>,
+    priority: usize,
 }
 
 impl BinaryOp {
@@ -128,26 +155,49 @@ impl BinaryOp {
     }
 }
 
+const PRESET_OPNAMES: [&str; 2] = ["in", "+"];
+
+fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
+    let opv = vec![
+        Operator::BinaryOp(BinaryOp {
+            name: "in".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1.is_in(s2)))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "+".to_string(),
+            priority: 3,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_union(s1,s2)))
+            }),
+        })
+    ];
+    return Vec::from(PRESET_OPNAMES.map(String::from)).into_iter().zip(opv.into_iter()).collect();
+}
+
 enum Operator {
     BinaryOp(BinaryOp),
     //UnaryOp(Box<dyn Fn(Token) -> Token>),
 }
 
 impl Operator {
-    fn from_token(token: Token) -> Option<Self> {
-        if token == Token::KeywordToken("in") {
-            let f = |t1: Token, t2: Token| {
-                match t1 {
-                    Token::SetToken(set1) => {
-                        match t2 {
-                            Token::SetToken(set2) => Ok(Token::BoolToken(set1.is_in(&set2))),
-                            _ => Err("Type error.".to_string()),
-                        }
-                    },
-                    _ => Err("Type error.".to_string()),
-                }
-            };
-            return Some(Operator::BinaryOp(BinaryOp {f: Box::new(f)}));
+    fn priority(&self) -> usize {
+        match self {
+            Self::BinaryOp(op) => op.priority,
+        }
+    }
+
+    fn from_token(token: Token) -> Option<String> {
+        for opname in PRESET_OPNAMES {
+            if token.to_string() == opname {
+                return Some(opname.to_string());
+            }
         }
         return None;
     }
@@ -210,33 +260,55 @@ impl<'a> PurifiedTokenList {
             return Ok(self.content[0].clone());
         }
 
-        let mut tv1: Vec<Token> = Vec::new();
-        let mut tv2: Vec<Token> = self.content.clone();
+        let preset_opmap = preset_operators();
+        let mut index: Option<usize> = None;
+        let mut priority = 11;
+        let mut operator: &Operator = preset_opmap.get(&"in".to_string()).unwrap();        
 
-        while !tv2.is_empty() {
-            let token = tv2.remove(0);
+        for i in 0..self.content.len() {
+            let token: Token = self.content[i].clone();
 
             // tokenがOperatorかどうか調べる
-            match Operator::from_token(token.clone()) {
-                None => tv1.push(token),  //Operatorじゃなかったらtv1に追加
-                Some(operator) => {
-                    match operator {
-                        Operator::BinaryOp(op) => {
-                            let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
-                            if tv2.is_empty() {
-                                return Err("Parse error: Nothing after binary operator.".to_string());
-                            }
-                            let t2 = tv2.remove(0);
-                            let t_res = op.apply(t1, t2)?;
-                            tv1.push(t_res);
-                            tv1.append(&mut tv2);
-                            return Self::from_tokenv(tv1)?.eval();
-                        },
+            if let Some(opname) = Operator::from_token(token.clone()) {
+                // Operatorだったら優先順位を確認
+                let op: &Operator = preset_opmap.get(&opname.to_string()).unwrap();
+                let priority1: usize;
+                match op {
+                    Operator::BinaryOp(binop) => {
+                        priority1 = binop.priority;
+                    }        
+                }
+                // 優先順位が既存より高ければindexと優先順位，Operatorオブジェクトを記憶
+                if priority1 < priority {
+                    index = Some(i);
+                    operator = preset_opmap.get(&opname).unwrap();
+                    priority = priority1;
+                }
+            }    
+        }
+
+        //何も見つかっていなかったらエラー
+        match index {
+            None => return Err("Parse error.".to_string()),
+            Some(i) => {
+                let mut tv1: Vec<Token> = self.content[0..i].to_vec();
+                let mut tv2: Vec<Token> = self.content[i+1..].to_vec();
+
+                match operator {
+                    Operator::BinaryOp(binop) => {
+                        let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                        if tv2.is_empty() {
+                            return Err("Parse error: Nothing after binary operator.".to_string());
+                        }
+                        let t2 = tv2.remove(0);
+                        let t_res = binop.apply(t1, t2)?;
+                        tv1.push(t_res);
+                        tv1.append(&mut tv2);
+                        return Self::from_tokenv(tv1)?.eval();
                     }
-                },
+                }
             }
         }
-        return Err("Parse error".to_string());
     }
 }
 
@@ -414,6 +486,23 @@ impl Set {
             }
         }
         return false;
+    }
+
+    fn to_setlist(&self) -> SetList {
+        if self.is_empty() {
+            return SetList { content: Vec::new() };
+        }
+
+        let content: Vec<SetList> = self.iter().map(|x| x.to_setlist()).collect();
+        return SetList { content: content };
+    }
+
+    fn set_union(set1: &Set, set2: &Set) -> Set {
+        let mut content1 = set1.to_setlist().content;
+        let mut content2 = set2.to_setlist().content;
+        content1.append(&mut content2);
+        let sl = SetList { content: content1 };
+        return sl.uniquify();
     }
 }
 
