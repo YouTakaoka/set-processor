@@ -24,84 +24,61 @@ fn eval_string(s: &String) -> Result<Token, String> {
 }
 
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
-const SYMBOL_LIST: [char; 6] = [' ', '{', '}', ',', '+', '*'];
+const SYMBOL_LIST: [&str; 9] = ["==", "!=", "=", " ", "{", "}", ",", "+", "*"];
 
 #[derive(Clone, PartialEq)]
 enum Token {
     SetToken(Set),
     KeywordToken(&'static str),
-    SymbolToken(char),
+    SymbolToken(&'static str),
     IdentifierToken(String),
     BoolToken(bool),
 }
 
 impl Token {
-    fn keyword_from_string(s: &String) -> Option<Token> {
-        for t in KEYWORD_LIST {
-            if s == t {
-                return Some(Self::KeywordToken(t));
-            }
-        }
-        return None;
-    }
-
-    fn symbol_from_char(c: char) -> Option<Token> {
-        for t in SYMBOL_LIST {
-            if c == t {
-                return Some(Self::SymbolToken(c));
-            }
-        }
-        return None;
-    }
-
-    fn token_from_string(s: &String) -> Option<Token> {
-        for f in [Self::keyword_from_string] {
-            match f(&s) {
+    fn split_by_token(string: &String) -> Option<(String, Token, String)> {
+        // Symbolから順番にtokenを探してsplitしていく
+        for symbol in SYMBOL_LIST {
+            match string.find(symbol) {
                 None => (),
-                Some(t) => return Some(t),
+                Some(n) => {
+                    let s1 = &string[0..n];
+                    let s2 = &string[n + symbol.len()..];
+                    let token = Token::SymbolToken(symbol);
+                    return Some((s1.to_string(), token, s2.to_string()));
+                }
+            }
+        }
+
+        for kw in KEYWORD_LIST {
+            match string.find(kw) {
+                None => (),
+                Some(n) => {
+                    let s1 = &string[0..n];
+                    let s2 = &string[n + kw.len()..];
+                    let token = Token::KeywordToken(kw);
+                    return Some((s1.to_string(), token, s2.to_string()));
+                }
             }
         }
         return None;
-    }
-
-    fn read_token(s: &String) -> Option<(Token, String)> {
-        let mut s1: String = String::new();
-        let mut s2: String = s.clone();
-
-        // s1の値がTokenとして解釈できるまでs2の頭文字をpushし続ける
-        loop {
-            let (c, tmp) = read_char(s2.clone())?;
-            
-            match Self::symbol_from_char(c) {
-                None => (),
-                Some(symbol) => {  // cが記号として解釈できるなら...
-                    if s1.is_empty() {
-                        // s1が空ならばsymbolを記号として返す
-                        return Some((symbol, tmp));
-                    } else {
-                        // s1が空でないなら一旦s1をトークンとして返す
-                        return Some((Token::token_from_string(&s1)?, s2));
-                    }
-                },
-            }
-
-            s2 = tmp;
-            s1.push(c);
-        }
     }
 
     fn tokenize(string: &String) -> Result<Vec<Token>, String> {
-        let mut s1 = string.clone();
-        let mut tv: Vec<Token> = Vec::new();
-        while !s1.is_empty() {
-            let (token, s) = match Self::read_token(&s1) {
-                Some(touple) => touple,
-                None => return Err("Parse error: Failed to tokenize.".to_string()),
-            };
-            s1 = s;
-            tv.push(token);
+        if string.is_empty() {
+            return Ok(Vec::new());
         }
-        return Ok(tv);
+
+        match Self::split_by_token(string) {
+            None => return Err("Parse error: Failed to tokenize.".to_string()),
+            Some((s1, token, s2)) => {
+                let mut tv1 = Self::tokenize(&s1)?;
+                let mut tv2 = Self::tokenize(&s2)?;
+                tv1.push(token);
+                tv1.append(&mut tv2);
+                return Ok(tv1);
+            }
+        }
     }
 
     fn to_string(self: &Self) -> String {
@@ -131,7 +108,7 @@ impl Token {
         if tv1.is_empty() {
             return Err("Curly brace is not closed.".to_string());
         }
-        while tv1[0] == Token::SymbolToken(' ') {
+        while tv1[0] == Token::SymbolToken(" ") {
             tv1.remove(0);
             if tv1.is_empty() {
                 return Err("Curly brace is not closed.".to_string());
@@ -188,7 +165,7 @@ impl<'a> PurifiedTokenList {
         let mut previous_is_not_symbol = false; // 連続したnon-symbol tokenを判定するためのフラグ
         for token in tv {
             // '}'があったらError
-            if token == Token::SymbolToken('}') {
+            if token == Token::SymbolToken("}") {
                 return Err("Curly brace is not closed.".to_string());
             }
 
@@ -205,7 +182,7 @@ impl<'a> PurifiedTokenList {
             }
             
             // tokenがスペースでない限り追加
-            if token != Token::SymbolToken(' ') {
+            if token != Token::SymbolToken(" ") {
                 tv1.push(token);
             }
         }
@@ -263,15 +240,6 @@ impl<'a> PurifiedTokenList {
     }
 }
 
-fn read_char(s: String) -> Option<(char, String)> {
-    if s.is_empty() {
-        return None;
-    }
-    let mut s2 = s.clone();
-    let c: char = s2.remove(0);
-    return Some((c, s2));
-}
-
 trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
     fn content(self: &Self) -> &Vec<T>;
     fn new(content: Vec<T>) -> T;
@@ -324,7 +292,7 @@ impl SetList {
         }
         let mut tv1: Vec<Token> = tv.clone();
         let t0 = tv1.remove(0);
-        if t0 != Token::SymbolToken('{') {
+        if t0 != Token::SymbolToken("{") {
             return Err("Parse error of set literal.".to_string());
         }
 
@@ -332,7 +300,7 @@ impl SetList {
         loop {
             tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
 
-            if tv1[0] == Token::SymbolToken('}') {
+            if tv1[0] == Token::SymbolToken("}") {
                 tv1.remove(0);  // remove "}"
                 return Ok((SetList {content: content}, tv1));
             }
@@ -341,7 +309,7 @@ impl SetList {
             content.push(sl);
             
             tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
-            if tv1[0] == Token::SymbolToken(',') {
+            if tv1[0] == Token::SymbolToken(",") {
                 tv1.remove(0);
             }
         }
@@ -428,7 +396,7 @@ impl Set {
         let mut tv1 = tv.clone();
         let mut tv2 = Vec::new();
         while !tv1.is_empty() {
-            if tv1[0] == Token::SymbolToken('{') {
+            if tv1[0] == Token::SymbolToken("{") {
                 let (set, tv3) = Self::from_tokenv(tv1)?;
                 tv1 = tv3;
                 tv2.push(Token::SetToken(set));
