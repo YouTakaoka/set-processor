@@ -11,27 +11,32 @@ fn main() -> std::io::Result<()> {
         if buffer.is_empty() {
             continue;
         }
-        match PurifiedTokenList::from_string(&buffer) {
-            Ok(ptl) => println!("{}", ptl.to_string()),
+        match eval_string(&buffer) {
+            Ok(token) => println!("{}", token.to_string()),
             Err(e) => println!("{}", e),
         }
     }
     Ok(())
 }
 
+fn eval_string(s: &String) -> Result<Token, String> {
+    return PurifiedTokenList::from_string(s)?.eval();
+}
+
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
 const SYMBOL_LIST: [char; 6] = [' ', '{', '}', ',', '+', '*'];
 
 #[derive(Clone, PartialEq)]
-enum Token<'a> {
+enum Token {
     SetToken(Set),
-    KeywordToken(&'a str),
+    KeywordToken(&'static str),
     SymbolToken(char),
     IdentifierToken(String),
+    BoolToken(bool),
 }
 
-impl<'a> Token<'a> {
-    fn keyword_from_string(s: &String) -> Option<Token<'a>> {
+impl Token {
+    fn keyword_from_string(s: &String) -> Option<Token> {
         for t in KEYWORD_LIST {
             if s == t {
                 return Some(Self::KeywordToken(t));
@@ -40,7 +45,7 @@ impl<'a> Token<'a> {
         return None;
     }
 
-    fn symbol_from_char(c: char) -> Option<Token<'a>> {
+    fn symbol_from_char(c: char) -> Option<Token> {
         for t in SYMBOL_LIST {
             if c == t {
                 return Some(Self::SymbolToken(c));
@@ -49,7 +54,7 @@ impl<'a> Token<'a> {
         return None;
     }
 
-    fn token_from_string(s: &String) -> Option<Token<'a>> {
+    fn token_from_string(s: &String) -> Option<Token> {
         for f in [Self::keyword_from_string] {
             match f(&s) {
                 None => (),
@@ -59,7 +64,7 @@ impl<'a> Token<'a> {
         return None;
     }
 
-    fn read_token(s: &String) -> Option<(Token<'a>, String)> {
+    fn read_token(s: &String) -> Option<(Token, String)> {
         let mut s1: String = String::new();
         let mut s2: String = s.clone();
 
@@ -85,13 +90,13 @@ impl<'a> Token<'a> {
         }
     }
 
-    fn tokenize(string: &String) -> Result<Vec<Token<'a>>, String> {
+    fn tokenize(string: &String) -> Result<Vec<Token>, String> {
         let mut s1 = string.clone();
         let mut tv: Vec<Token> = Vec::new();
         while !s1.is_empty() {
             let (token, s) = match Self::read_token(&s1) {
                 Some(touple) => touple,
-                None => return Err("Parse error.".to_string()),
+                None => return Err("Parse error: Failed to tokenize.".to_string()),
             };
             s1 = s;
             tv.push(token);
@@ -105,6 +110,7 @@ impl<'a> Token<'a> {
             Self::SymbolToken(s) => s.to_string(),
             Self::KeywordToken(s) => s.to_string(),
             Self::IdentifierToken(s) => s.to_string(),
+            Self::BoolToken(b) => b.to_string(),
         }
     }
 
@@ -120,7 +126,7 @@ impl<'a> Token<'a> {
         return s;
     }
 
-    fn check_empty_and_remove_spaces(tv: &Vec<Token<'a>>) -> Result<Vec<Token<'a>>, String> {
+    fn check_empty_and_remove_spaces(tv: &Vec<Token>) -> Result<Vec<Token>, String> {
         let mut tv1 = tv.clone();
         if tv1.is_empty() {
             return Err("Curly brace is not closed.".to_string());
@@ -135,12 +141,48 @@ impl<'a> Token<'a> {
     }
 }
 
-struct PurifiedTokenList<'a> {
-    content: Vec<Token<'a>>,
+struct BinaryOp {
+    f: Box<dyn Fn(Token, Token) -> Result<Token, String>>,
 }
 
-impl<'a> PurifiedTokenList<'a> {
-    fn from_tokenv(tv: Vec<Token<'a>>) -> Result<Self, String> {
+impl BinaryOp {
+    fn apply(&self, t1: Token, t2: Token) -> Result<Token, String> {
+        return (self.f)(t1, t2);
+    }
+}
+
+enum Operator {
+    BinaryOp(BinaryOp),
+    //UnaryOp(Box<dyn Fn(Token) -> Token>),
+}
+
+impl Operator {
+    fn from_token(token: Token) -> Option<Self> {
+        if token == Token::KeywordToken("in") {
+            let f = |t1: Token, t2: Token| {
+                match t1 {
+                    Token::SetToken(set1) => {
+                        match t2 {
+                            Token::SetToken(set2) => Ok(Token::BoolToken(set1.is_in(&set2))),
+                            _ => Err("Type error.".to_string()),
+                        }
+                    },
+                    _ => Err("Type error.".to_string()),
+                }
+            };
+            return Some(Operator::BinaryOp(BinaryOp {f: Box::new(f)}));
+        }
+        return None;
+    }
+}
+
+#[derive(Clone)]
+struct PurifiedTokenList {
+    content: Vec<Token>,
+}
+
+impl<'a> PurifiedTokenList {
+    fn from_tokenv(tv: Vec<Token>) -> Result<Self, String> {
         let mut tv1: Vec<Token> = Vec::new();
 
         let mut previous_is_not_symbol = false; // 連続したnon-symbol tokenを判定するためのフラグ
@@ -177,6 +219,47 @@ impl<'a> PurifiedTokenList<'a> {
 
     fn to_string(self: &Self) -> String {
         return Token::tokenv_to_string(&self.content);
+    }
+
+    fn is_empty(&self) -> bool {
+        return self.content.is_empty();
+    }
+
+    fn eval(&self) -> Result<Token, String> {
+        if self.is_empty() {
+            panic!("PurifiedTokenList::eval: Got empty vector.");
+        }
+        if self.content.len() == 1 {
+            return Ok(self.content[0].clone());
+        }
+
+        let mut tv1: Vec<Token> = Vec::new();
+        let mut tv2: Vec<Token> = self.content.clone();
+
+        while !tv2.is_empty() {
+            let token = tv2.remove(0);
+
+            // tokenがOperatorかどうか調べる
+            match Operator::from_token(token.clone()) {
+                None => tv1.push(token),  //Operatorじゃなかったらtv1に追加
+                Some(operator) => {
+                    match operator {
+                        Operator::BinaryOp(op) => {
+                            let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                            if tv2.is_empty() {
+                                return Err("Parse error: Nothing after binary operator.".to_string());
+                            }
+                            let t2 = tv2.remove(0);
+                            let t_res = op.apply(t1, t2)?;
+                            tv1.push(t_res);
+                            tv1.append(&mut tv2);
+                            return Self::from_tokenv(tv1)?.eval();
+                        },
+                    }
+                },
+            }
+        }
+        return Err("Parse error".to_string());
     }
 }
 
@@ -354,6 +437,15 @@ impl Set {
             }
         }
         return Ok(tv2);
+    }
+
+    fn is_in(&self, set: &Self) -> bool {
+        for e in set.content() {
+            if self == e {
+                return true;
+            }
+        }
+        return false;
     }
 }
 
