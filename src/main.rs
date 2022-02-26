@@ -8,9 +8,7 @@ fn main() -> std::io::Result<()> {
         if buffer == "exit" {
             break;
         }
-        if buffer.is_empty() {
-            continue;
-        }
+        
         match eval_string(&buffer) {
             Ok(token) => println!("{}", token.to_string()),
             Err(e) => println!("{}", e),
@@ -33,6 +31,7 @@ enum Token {
     SymbolToken(&'static str),
     IdentifierToken(String),
     BoolToken(bool),
+    NullToken,
 }
 
 enum TokenType {
@@ -41,6 +40,7 @@ enum TokenType {
     SymbolToken,
     IdentifierToken,
     BoolToken,
+    NullToken,
 }
 
 impl Token {
@@ -51,6 +51,7 @@ impl Token {
             Token::SymbolToken(_) => TokenType::SymbolToken,
             Token::IdentifierToken(_) => TokenType::IdentifierToken,
             Token::BoolToken(_) => TokenType::BoolToken,
+            Token::NullToken => TokenType::NullToken,
         }
     }
 
@@ -113,6 +114,7 @@ impl Token {
             Self::KeywordToken(s) => s.to_string(),
             Self::IdentifierToken(s) => s.to_string(),
             Self::BoolToken(b) => b.to_string(),
+            Self::NullToken => "".to_string(),
         }
     }
 
@@ -254,7 +256,7 @@ impl<'a> PurifiedTokenList {
 
     fn eval(&self) -> Result<Token, String> {
         if self.is_empty() {
-            panic!("PurifiedTokenList::eval: Got empty vector.");
+            return Ok(Token::NullToken);
         }
         if self.content.len() == 1 {
             return Ok(self.content[0].clone());
