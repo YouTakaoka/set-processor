@@ -157,10 +157,18 @@ impl BinaryOp {
     }
 }
 
-const PRESET_OPNAMES: [&str; 2] = ["in", "+"];
-
+// presetの演算子はここに追加していく
 fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
     let opv = vec![
+        Operator::BinaryOp(BinaryOp {
+            name: "==".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1 == s2))
+            }),
+        }),
         Operator::BinaryOp(BinaryOp {
             name: "in".to_string(),
             priority: 4,
@@ -180,7 +188,9 @@ fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             }),
         })
     ];
-    return Vec::from(PRESET_OPNAMES.map(String::from)).into_iter().zip(opv.into_iter()).collect();
+
+    let opnames: Vec<String> = opv.iter().map(|x| x.name()).collect();
+    return opnames.into_iter().zip(opv.into_iter()).collect();
 }
 
 enum Operator {
@@ -195,9 +205,15 @@ impl Operator {
         }
     }
 
+    fn name(&self) -> String {
+        match self {
+            Self::BinaryOp(op) => op.name.clone(),
+        }
+    }
+
     fn from_token(token: Token) -> Option<String> {
-        for opname in PRESET_OPNAMES {
-            if token.to_string() == opname {
+        for opname in preset_operators().keys() {
+            if token.to_string() == opname.clone() {
                 return Some(opname.to_string());
             }
         }
@@ -274,12 +290,8 @@ impl<'a> PurifiedTokenList {
             if let Some(opname) = Operator::from_token(token.clone()) {
                 // Operatorだったら優先順位を確認
                 let op: &Operator = preset_opmap.get(&opname.to_string()).unwrap();
-                let priority1: usize;
-                match op {
-                    Operator::BinaryOp(binop) => {
-                        priority1 = binop.priority;
-                    }        
-                }
+                let priority1 = op.priority();
+
                 // 優先順位が既存より高ければindexと優先順位，Operatorオブジェクトを記憶
                 if priority1 < priority {
                     index = Some(i);
