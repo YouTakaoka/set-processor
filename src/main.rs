@@ -65,26 +65,20 @@ impl Token {
     fn split_by_token(string: &String) -> Option<(String, Token, String)> {
         // Symbolから順番にtokenを探してsplitしていく
         for symbol in SYMBOL_LIST {
-            match string.find(symbol) {
-                None => (),
-                Some(n) => {
-                    let s1 = &string[0..n];
-                    let s2 = &string[n + symbol.len()..];
-                    let token = Token::SymbolToken(symbol);
-                    return Some((s1.to_string(), token, s2.to_string()));
-                }
+            if let Some(n) = string.find(symbol) {
+                let s1 = &string[0..n];
+                let s2 = &string[n + symbol.len()..];
+                let token = Token::SymbolToken(symbol);
+                return Some((s1.to_string(), token, s2.to_string()));
             }
         }
 
         for kw in KEYWORD_LIST {
-            match string.find(kw) {
-                None => (),
-                Some(n) => {
-                    let s1 = &string[0..n];
-                    let s2 = &string[n + kw.len()..];
-                    let token = Token::KeywordToken(kw);
-                    return Some((s1.to_string(), token, s2.to_string()));
-                }
+            if let Some(n) = string.find(kw) {
+                let s1 = &string[0..n];
+                let s2 = &string[n + kw.len()..];
+                let token = Token::KeywordToken(kw);
+                return Some((s1.to_string(), token, s2.to_string()));
             }
         }
         return None;
@@ -231,6 +225,7 @@ impl<'a> PurifiedTokenList {
         let mut tv1: Vec<Token> = Vec::new();
 
         let mut previous_is_not_symbol = false; // 連続したnon-symbol tokenを判定するためのフラグ
+        let mut previous_token = "".to_string();
         for token in tv {
             // '}'があったらError
             if token == Token::SymbolToken("}") {
@@ -242,12 +237,13 @@ impl<'a> PurifiedTokenList {
                 Token::SymbolToken(_) => previous_is_not_symbol = false,  // フラグを更新
                 _ => {
                     if previous_is_not_symbol {
-                        return Err("Parse error: Found two contiguous non-symbol tokens without any spaces between them.".to_string());
+                        return Err(format!("Parse error: Found two contiguous non-symbol tokens without any spaces between them: {}, {}", previous_token, token.to_string()));
                     } else {
                         previous_is_not_symbol = true; // フラグを更新
                     }
                 },
             }
+            previous_token = token.to_string();            
             
             // tokenがスペースでない限り追加
             if token != Token::SymbolToken(" ") {
@@ -318,7 +314,7 @@ impl<'a> PurifiedTokenList {
                         let t_res = binop.apply(t1, t2)?;
                         tv1.push(t_res);
                         tv1.append(&mut tv2);
-                        return Self::from_tokenv(tv1)?.eval();
+                        return Self {content: tv1}.eval();
                     }
                 }
             }
