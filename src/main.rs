@@ -22,7 +22,7 @@ fn eval_string(s: &String) -> Result<Token, String> {
 }
 
 const KEYWORD_LIST: [&str; 3] = ["in", "size", "is_empty"];
-const SYMBOL_LIST: [&str; 9] = ["==", "!=", "=", " ", "{", "}", ",", "+", "*"];
+const SYMBOL_LIST: [&str; 10] = ["==", "!=", "!", "=", " ", "{", "}", ",", "+", "*"];
 
 #[derive(Clone, PartialEq)]
 enum Token {
@@ -58,6 +58,13 @@ impl Token {
     fn to_set(&self, mes: &String) -> Result<&Set, String> {
         match self {
             Token::SetToken(set) => Ok(set),
+            _ => Err(mes.clone()),
+        }
+    }
+
+    fn to_bool(&self, mes: &String) -> Result<&bool, String> {
+        match self {
+            Token::BoolToken(b) => Ok(b),
             _ => Err(mes.clone()),
         }
     }
@@ -151,9 +158,29 @@ impl BinaryOp {
     }
 }
 
+struct UnaryOp {
+    name: String,
+    f: Box<dyn Fn(Token) -> Result<Token, String>>,
+    priority: usize,
+}
+
+impl UnaryOp {
+    fn apply(&self, t: Token) -> Result<Token, String> {
+        return (self.f)(t);
+    }
+}
+
 // presetの演算子はここに追加していく
 fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
     let opv = vec![
+        Operator::UnaryOp(UnaryOp {
+            name: "!".to_string(),
+            priority: 5,
+            f: Box::new(|t: Token| {
+                let b = t.to_bool(&"Type Error in the first argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(!b))
+            }),
+        }),
         Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
             priority: 4,
@@ -161,6 +188,15 @@ fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::BoolToken(s1 == s2))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "!=".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1 != s2))
             }),
         }),
         Operator::BinaryOp(BinaryOp {
@@ -180,7 +216,16 @@ fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::SetToken(Set::set_union(s1,s2)))
             }),
-        })
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "*".to_string(),
+            priority: 2,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_intersec(s1,s2)))
+            }),
+        }),
     ];
 
     let opnames: Vec<String> = opv.iter().map(|x| x.name()).collect();
@@ -189,19 +234,21 @@ fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
 
 enum Operator {
     BinaryOp(BinaryOp),
-    //UnaryOp(Box<dyn Fn(Token) -> Token>),
+    UnaryOp(UnaryOp),
 }
 
 impl Operator {
     fn priority(&self) -> usize {
         match self {
             Self::BinaryOp(op) => op.priority,
+            Self::UnaryOp(op) => op.priority,
         }
     }
 
     fn name(&self) -> String {
         match self {
             Self::BinaryOp(op) => op.name.clone(),
+            Self::UnaryOp(op) => op.name.clone(),
         }
     }
 
@@ -315,7 +362,17 @@ impl<'a> PurifiedTokenList {
                         tv1.push(t_res);
                         tv1.append(&mut tv2);
                         return Self {content: tv1}.eval();
-                    }
+                    },
+                    Operator::UnaryOp(unop) => {
+                        if tv2.is_empty() {
+                            return Err("Parse error: Nothing after binary operator.".to_string());
+                        }
+                        let t = tv2.remove(0);
+                        let t_res = unop.apply(t)?;
+                        tv1.push(t_res);
+                        tv1.append(&mut tv2);
+                        return Self {content: tv1}.eval();
+                    },
                 }
             }
         }
@@ -513,6 +570,18 @@ impl Set {
         content1.append(&mut content2);
         let sl = SetList { content: content1 };
         return sl.uniquify();
+    }
+
+    fn set_intersec(set1: &Set, set2: &Set) -> Set {
+        let mut content: Vec<Set> = Vec::new();
+
+        for s in set1.iter() {
+            if s.is_in(set2) {
+                content.push(s.clone());
+            }
+        }
+
+        return Set {content: content};
     }
 }
 
