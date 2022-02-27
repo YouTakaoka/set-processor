@@ -55,21 +55,66 @@ impl<'a> PurifiedTokenList {
         return self.content.is_empty();
     }
 
-    pub fn eval(&self) -> Result<Token, String> {
-        if self.is_empty() {
-            return Ok(Token::NullToken);
+    fn substitute(token: &Token, bindv: Vec<Bind>) -> Result<Token, String> {
+        if let Token::IdentifierToken(identifier) = token {
+            for bind in bindv {
+                if bind.identifier == identifier.clone() {
+                    return Ok(bind.value);
+                }
+            }
+            return Err(format!("Undefined token: {}", token.to_string()))
         }
-        if self.content.len() == 1 {
-            return Ok(self.content[0].clone());
+        return Ok(token.clone());
+    }
+
+    pub fn eval(&self, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+        if self.is_empty() {
+            return Ok((Token::NullToken, bindv));
+        }
+        
+        // 頭がletキーワードだった場合の処理
+        if self.content[0] == Token::KeywordToken("let") {
+            if self.content[2] != Token::SymbolToken("=") {
+                return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
+            }
+
+            match &self.content[1] {
+                Token::IdentifierToken(identifier) => {
+                    for bind in bindv.clone() {
+                        if bind.identifier == identifier.clone() {
+                            return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
+                        }
+                    }
+                    let (token, _) = Self {content: self.content[3..].to_vec()}.eval(bindv.clone())?;
+                    let mut bindv_new = bindv.clone();
+                    bindv_new.push(Bind {
+                        identifier: identifier.clone(),
+                        value: token.clone(),
+                    });
+                    return Ok((token, bindv_new));
+                },
+                _ => return Err(format!("Cannot use '{}' as identifier.", self.content[1].to_string())),
+            }
         }
 
+        // Identifierトークンの置き換え処理
+        let mut content: Vec<Token> = Vec::new();
+        for token in &self.content {
+            content.push(Self::substitute(&token, bindv.clone())?);
+        }
+
+        // トークン列が長さ1ならそのまま返す
+        if content.len() == 1 {
+            return Ok((content[0].clone(), bindv));
+        }
+        
         let preset_opmap = preset_operators();
         let mut index: Option<usize> = None;
         let mut priority = 11;
         let mut operator: &Operator = preset_opmap.get(&"in".to_string()).unwrap();        
 
-        for i in 0..self.content.len() {
-            let token: Token = self.content[i].clone();
+        for i in 0..content.len() {
+            let token: Token = content[i].clone();
 
             // tokenがOperatorかどうか調べる
             if let Some(opname) = Operator::from_token(token.clone()) {
@@ -90,8 +135,8 @@ impl<'a> PurifiedTokenList {
         match index {
             None => return Err("Parse error.".to_string()),
             Some(i) => {
-                let mut tv1: Vec<Token> = self.content[0..i].to_vec();
-                let mut tv2: Vec<Token> = self.content[i+1..].to_vec();
+                let mut tv1: Vec<Token> = content[0..i].to_vec();
+                let mut tv2: Vec<Token> = content[i+1..].to_vec();
 
                 match operator {
                     Operator::BinaryOp(binop) => {
@@ -103,7 +148,7 @@ impl<'a> PurifiedTokenList {
                         let t_res = binop.apply(t1, t2)?;
                         tv1.push(t_res);
                         tv1.append(&mut tv2);
-                        return Self {content: tv1}.eval();
+                        return Self {content: tv1}.eval(bindv);
                     },
                     Operator::UnaryOp(unop) => {
                         if tv2.is_empty() {
@@ -113,7 +158,7 @@ impl<'a> PurifiedTokenList {
                         let t_res = unop.apply(t)?;
                         tv1.push(t_res);
                         tv1.append(&mut tv2);
-                        return Self {content: tv1}.eval();
+                        return Self {content: tv1}.eval(bindv);
                     },
                 }
             }
@@ -121,6 +166,12 @@ impl<'a> PurifiedTokenList {
     }
 }
 
-pub fn eval_string(s: &String) -> Result<Token, String> {
-    return PurifiedTokenList::from_string(s)?.eval();
+#[derive(Clone)]
+pub struct Bind {
+    identifier: String,
+    value: Token,
+}
+
+pub fn eval_string(s: &String, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+    return PurifiedTokenList::from_string(s)?.eval(bindv);
 }

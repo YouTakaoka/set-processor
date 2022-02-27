@@ -295,7 +295,9 @@ impl Token {
                 return Some((s1.to_string(), token, s2.to_string()));
             }
         }
-        return None;
+
+        // SymbolTokenもKeywordTokenも見つからなければIdentifierTokenと見做す
+        return Some(("".to_string(), Token::IdentifierToken(string.clone()), "".to_string()));
     }
 
     pub fn tokenize(string: &String) -> Result<Vec<Token>, String> {
