@@ -66,6 +66,15 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             }),
         }),
         Operator::BinaryOp(BinaryOp {
+            name: "-".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_diff(s1,s2)))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
             name: "+".to_string(),
             priority: 3,
             f: Box::new(|t1: Token, t2: Token| {

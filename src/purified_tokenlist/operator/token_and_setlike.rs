@@ -207,6 +207,18 @@ impl Set {
 
         return Set {content: content};
     }
+
+    pub fn set_diff(set1: &Set, set2: &Set) -> Set {
+        let mut content: Vec<Set> = Vec::new();
+
+        for s in set1.iter() {
+            if !s.is_in(set2) {
+                content.push(s.clone());
+            }
+        }
+
+        return Set {content: content};
+    }
 }
 
 impl PartialEq for Set {
