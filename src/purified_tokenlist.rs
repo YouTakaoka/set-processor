@@ -72,8 +72,12 @@ impl<'a> PurifiedTokenList {
             return Ok((Token::NullToken, bindv));
         }
         
-        // 頭がletキーワードだった場合の処理
+        // 先頭がletキーワードだった場合の処理
         if self.content[0] == Token::KeywordToken("let") {
+            if self.content.len() < 4 {
+                return Err("Parse error: 'let' statement is too short.".to_string());
+            }
+            
             if self.content[2] != Token::SymbolToken("=") {
                 return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
             }
