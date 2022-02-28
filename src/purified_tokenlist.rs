@@ -67,25 +67,23 @@ impl<'a> PurifiedTokenList {
         return Ok(token.clone());
     }
 
-    pub fn find_bracket(tokenv: &Vec<Token>, b: &str, e: &str) -> Result<Option<(usize, usize)>, String> {
+    pub fn find_bracket(tokenv: &Vec<Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
         let mut ib: Option<usize> = None;
         let mut cnt = 0;
 
         for i in 0..tokenv.len() {
-            if let Token::SymbolToken(symbol) = tokenv[i] {
-                if symbol == e {
-                    if cnt < 1 {
-                        return Err("Bracket is not closed.".to_string());
-                    } else if cnt == 1 {
-                        return Ok(Some((ib.unwrap(), i)));
-                    }
-                    cnt -= 1;
-                } else if symbol == b {
-                    if cnt == 0 {
-                        ib = Some(i);
-                    }
-                    cnt += 1;
+            if tokenv[i] == te {
+                if cnt < 1 {
+                    return Err("Bracket is not closed.".to_string());
+                } else if cnt == 1 {
+                    return Ok(Some((ib.unwrap(), i)));
                 }
+                cnt -= 1;
+            } else if tokenv[i] == tb {
+                if cnt == 0 {
+                    ib = Some(i);
+                }
+                cnt += 1;
             }
         }
 
@@ -94,6 +92,16 @@ impl<'a> PurifiedTokenList {
         }
         
         return Err("Bracket is not closed.".to_string());
+    }
+
+    fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
+        let mut i_ret: Option<usize> = None;
+        for i in 0..tokenv.len() {
+            if tokenv[i] == token {
+                i_ret = Some(i);
+            }
+        }
+        return i_ret;
     }
 
     pub fn eval(&self, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
@@ -130,8 +138,45 @@ impl<'a> PurifiedTokenList {
             }
         }
 
+        // if文の処理
+        if self.content[0] == Token::KeywordToken("if") {
+            match Self::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("then")) {
+                Err(_) => return Err("Keyword 'then' not found after 'if' token.".to_string()),
+                Ok(option_then) => { // then節が見つかった場合
+                    let (_, i_then) = option_then.unwrap();
+                    match Self::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("else")) {
+                        Err(_) => return Err("Keyword 'else' not found after 'if' token.".to_string()),
+                        Ok(option_else) => { // else節が見つかった場合
+                            let (_, i_else) = option_else.unwrap();
+                            if i_then > i_else {
+                                return Err("Keyword 'then' found after 'else'.".to_string());
+                            }
+
+                            // if節を評価
+                            let (token1, bindv1) = Self {content: self.content[1..i_then].to_vec()}.eval(bindv.clone())?;
+                            let tokenv_then = &self.content[i_then+1..i_else]; // then節
+                            let tokenv_else = &self.content[i_else+1..]; // else節
+
+                            match token1 {
+                                Token::BoolToken(b) => { // 評価結果がbool型だった場合
+                                    //todo
+                                    if b { // 条件式==trueの場合
+                                        return Self {content: tokenv_then.to_vec()}.eval(bindv1);
+                                    } else { // 条件式==falseの場合
+                                        return Self {content: tokenv_else.to_vec()}.eval(bindv1);
+                                    }
+                                },
+                                // boolじゃなかったらError
+                                _ => return Err("Type error: Non-bool value returned by the 'if' expression.".to_string()),
+                            }
+                        },
+                    }
+                },
+            }
+        }
+
         // 括弧処理
-        while let Some((ib, ie)) = Self::find_bracket(&self.content, "(", ")")? {
+        while let Some((ib, ie)) = Self::find_bracket(&self.content, Token::SymbolToken("("), Token::SymbolToken(")"))? {
             let mut tv1 = self.content[0..ib].to_vec();
             let tv2 = self.content[ib+1..ie].to_vec();
             let mut tv3 = self.content[ie+1..].to_vec();
