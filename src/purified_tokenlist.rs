@@ -67,6 +67,35 @@ impl<'a> PurifiedTokenList {
         return Ok(token.clone());
     }
 
+    pub fn find_bracket(tokenv: &Vec<Token>, b: &str, e: &str) -> Result<Option<(usize, usize)>, String> {
+        let mut ib: Option<usize> = None;
+        let mut cnt = 0;
+
+        for i in 0..tokenv.len() {
+            if let Token::SymbolToken(symbol) = tokenv[i] {
+                if symbol == e {
+                    if cnt < 1 {
+                        return Err("Bracket is not closed.".to_string());
+                    } else if cnt == 1 {
+                        return Ok(Some((ib.unwrap(), i)));
+                    }
+                    cnt -= 1;
+                } else if symbol == b {
+                    if cnt == 0 {
+                        ib = Some(i);
+                    }
+                    cnt += 1;
+                }
+            }
+        }
+
+        if let None = ib {
+            return Ok(None);
+        }
+        
+        return Err("Bracket is not closed.".to_string());
+    }
+
     pub fn eval(&self, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
         if self.is_empty() {
             return Ok((Token::NullToken, bindv));
@@ -77,7 +106,7 @@ impl<'a> PurifiedTokenList {
             if self.content.len() < 4 {
                 return Err("Parse error: 'let' statement is too short.".to_string());
             }
-            
+
             if self.content[2] != Token::SymbolToken("=") {
                 return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
             }
@@ -99,6 +128,17 @@ impl<'a> PurifiedTokenList {
                 },
                 _ => return Err(format!("Cannot use '{}' as identifier.", self.content[1].to_string())),
             }
+        }
+
+        // 括弧処理
+        while let Some((ib, ie)) = Self::find_bracket(&self.content, "(", ")")? {
+            let mut tv1 = self.content[0..ib].to_vec();
+            let tv2 = self.content[ib+1..ie].to_vec();
+            let mut tv3 = self.content[ie+1..].to_vec();
+            let (token, _) = Self {content: tv2}.eval(bindv.clone())?;
+            tv1.push(token);
+            tv1.append(&mut tv3);
+            return Self {content: tv1}.eval(bindv);
         }
 
         // Identifierトークンの置き換え処理
