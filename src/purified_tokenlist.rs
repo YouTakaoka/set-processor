@@ -180,10 +180,10 @@ impl<'a> PurifiedTokenList {
             let mut tv1 = self.content[0..ib].to_vec();
             let tv2 = self.content[ib+1..ie].to_vec();
             let mut tv3 = self.content[ie+1..].to_vec();
-            let (token, _) = Self {content: tv2}.eval(bindv.clone())?;
+            let (token, bindv1) = Self {content: tv2}.eval(bindv.clone())?;
             tv1.push(token);
             tv1.append(&mut tv3);
-            return Self {content: tv1}.eval(bindv);
+            return Self {content: tv1}.eval(bindv1);
         }
 
         // Identifierトークンの置き換え処理
