@@ -11,7 +11,7 @@ fn main() -> std::io::Result<()> {
     loop{
         let mut buffer = String::new();
         print!("set-processor> ");
-        stdout().flush();
+        stdout().flush()?;
         stdin().read_line(&mut buffer).expect("Fail to read line.");
         buffer.pop();
         if buffer == "exit" {
