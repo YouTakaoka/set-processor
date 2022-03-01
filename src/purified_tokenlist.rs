@@ -11,40 +11,12 @@ pub struct PurifiedTokenList {
 
 impl<'a> PurifiedTokenList {
     fn from_tokenv(tv: Vec<Token>) -> Result<Self, String> {
-        let mut tv1: Vec<Token> = Vec::new();
-
-        let mut previous_is_not_symbol = false; // 連続したnon-symbol tokenを判定するためのフラグ
-        let mut previous_token = "".to_string();
-        for token in tv {
-            // '}'があったらError
-            if token == Token::SymbolToken("}") {
-                return Err("Curly brace is not closed.".to_string());
-            }
-
-            // 連続したnon-symbol tokenがあったらError
-            match token {
-                Token::SymbolToken(_) => previous_is_not_symbol = false,  // フラグを更新
-                _ => {
-                    if previous_is_not_symbol {
-                        return Err(format!("Parse error: Found two contiguous non-symbol tokens without any spaces between them: {}, {}", previous_token, token.to_string()));
-                    } else {
-                        previous_is_not_symbol = true; // フラグを更新
-                    }
-                },
-            }
-            previous_token = token.to_string();            
-            
-            // tokenがスペースでない限り追加
-            if token != Token::SymbolToken(" ") {
-                tv1.push(token);
-            }
-        }
-
+        let tv1: Vec<Token> = tv.clone();
         return Ok(PurifiedTokenList {content: tv1});
     }
 
     pub fn from_string(s: &String) -> Result<Self, String> {
-        return Ok(Self::from_tokenv(Set::parse_all_sets(Token::tokenize(&s)?)?)?);
+        return Ok(Self::from_tokenv(Token::tokenize(&s)?)?);
     }
 
     pub fn to_string(self: &Self) -> String {
@@ -65,33 +37,6 @@ impl<'a> PurifiedTokenList {
             return Err(format!("Undefined token: {}", token.to_string()))
         }
         return Ok(token.clone());
-    }
-
-    pub fn find_bracket(tokenv: &Vec<Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
-        let mut ib: Option<usize> = None;
-        let mut cnt = 0;
-
-        for i in 0..tokenv.len() {
-            if tokenv[i] == te {
-                if cnt < 1 {
-                    return Err("Bracket is not closed.".to_string());
-                } else if cnt == 1 {
-                    return Ok(Some((ib.unwrap(), i)));
-                }
-                cnt -= 1;
-            } else if tokenv[i] == tb {
-                if cnt == 0 {
-                    ib = Some(i);
-                }
-                cnt += 1;
-            }
-        }
-
-        if let None = ib {
-            return Ok(None);
-        }
-        
-        return Err("Bracket is not closed.".to_string());
     }
 
     fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
@@ -140,11 +85,11 @@ impl<'a> PurifiedTokenList {
 
         // if文の処理
         if self.content[0] == Token::KeywordToken("if") {
-            match Self::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("then")) {
+            match Token::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("then")) {
                 Err(_) => return Err("Keyword 'then' not found after 'if' token.".to_string()),
                 Ok(option_then) => { // then節が見つかった場合
                     let (_, i_then) = option_then.unwrap();
-                    match Self::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("else")) {
+                    match Token::find_bracket(&self.content, Token::KeywordToken("if"), Token::KeywordToken("else")) {
                         Err(_) => return Err("Keyword 'else' not found after 'if' token.".to_string()),
                         Ok(option_else) => { // else節が見つかった場合
                             let (_, i_else) = option_else.unwrap();
@@ -176,7 +121,7 @@ impl<'a> PurifiedTokenList {
         }
 
         // 括弧処理
-        while let Some((ib, ie)) = Self::find_bracket(&self.content, Token::SymbolToken("("), Token::SymbolToken(")"))? {
+        while let Some((ib, ie)) = Token::find_bracket(&self.content, Token::SymbolToken("("), Token::SymbolToken(")"))? {
             let mut tv1 = self.content[0..ib].to_vec();
             let tv2 = self.content[ib+1..ie].to_vec();
             let mut tv3 = self.content[ie+1..].to_vec();
@@ -253,12 +198,6 @@ impl<'a> PurifiedTokenList {
             }
         }
     }
-}
-
-#[derive(Clone)]
-pub struct Bind {
-    identifier: String,
-    value: Token,
 }
 
 pub fn eval_string(s: &String, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {

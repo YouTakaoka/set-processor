@@ -1,7 +1,7 @@
-mod purified_tokenlist;
+mod eval;
 
-pub use crate::purified_tokenlist::PurifiedTokenList;
-pub use crate::purified_tokenlist::eval_string;
+pub use crate::eval::*;
+pub use crate::eval::eval_string;
 
 use std::io::{stdin, stdout, Write};
 
