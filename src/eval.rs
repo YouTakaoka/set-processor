@@ -90,23 +90,24 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
             return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
         }
 
-        match &ftl.get(1).unwrap() {
-            Token::IdentifierToken(identifier) => {
-                for bind in bindv.clone() {
-                    if bind.identifier == identifier.clone() {
-                        return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
-                    }
+        let token1 = ftl.get(1).unwrap();
+        if let Token::IdentifierToken(identifier) = &token1 {
+            for bind in bindv.clone() {
+                if bind.identifier == identifier.clone() {
+                    return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
                 }
-                let (token, _) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[3..].to_vec(), bound)?, bindv.clone())?;
-                let mut bindv_new = bindv.clone();
-                bindv_new.push(Bind {
-                    identifier: identifier.clone(),
-                    value: token.clone(),
-                });
-                return Ok((token, bindv_new));
-            },
-            _ => return Err(format!("Cannot use '{}' as identifier.", ftl.get(1).unwrap().to_string())),
+            }
+            let (token, _) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[3..].to_vec(), bound)?, bindv.clone())?;
+            let mut bindv_new = bindv.clone();
+            bindv_new.push(Bind {
+                identifier: identifier.clone(),
+                value: token.clone(),
+            });
+            return Ok((token, bindv_new));
         }
+
+        // token1がIdentifierTokenでなかった場合
+        return Err(format!("Cannot use '{}' as identifier.", token1.to_string()));
     }
 
     // if文の処理
@@ -130,7 +131,7 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
         let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[1..i_then].to_vec(), bound)?, bindv.clone())?;
         let tokenv_then = &ftl.get_contents()[i_then+1..i_else]; // then節
         let tokenv_else = &ftl.get_contents()[i_else+1..]; // else節
-        
+
         match token1 {
             Token::BoolToken(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
