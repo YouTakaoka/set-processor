@@ -168,6 +168,7 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
         return Ok((contents[0].clone(), bindv));
     }
     
+    // Operator探し
     let preset_opmap = preset_operators();
     let mut index: Option<usize> = None;
     let mut priority = 11;

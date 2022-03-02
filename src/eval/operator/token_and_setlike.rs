@@ -376,7 +376,7 @@ impl FrozenTokenList {
     pub fn from_tokenv(tv: &Vec<Token>, bound: &Option<(String, String)>) -> Result<Self, String> {
         let mut contents = tv.clone();
 
-        if let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
+        while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
             let mut tv1 = contents[0..ib].to_vec();
