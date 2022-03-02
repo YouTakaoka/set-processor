@@ -163,11 +163,6 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
         contents[i] = Token::substitute(&token, bindv.clone())?;
     }
 
-    // トークン列が長さ1ならそのまま返す
-    if contents.len() == 1 {
-        return Ok((contents[0].clone(), bindv));
-    }
-    
     // Operator探し
     let preset_opmap = preset_operators();
     let mut index: Option<usize> = None;
@@ -193,36 +188,40 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     }
 
     //何も見つかっていなかったらエラー
-    match index {
-        None => return Err("Parse error.".to_string()),
-        Some(i) => {
-            let mut tv1: Vec<Token> = contents[0..i].to_vec();
-            let mut tv2: Vec<Token> = contents[i+1..].to_vec();
+    if let Some(i) = index {
+        let mut tv1: Vec<Token> = contents[0..i].to_vec();
+        let mut tv2: Vec<Token> = contents[i+1..].to_vec();
 
-            match operator {
-                Operator::BinaryOp(binop) => {
-                    let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
-                    if tv2.is_empty() {
-                        return Err("Parse error: Nothing after binary operator.".to_string());
-                    }
-                    let t2 = tv2.remove(0);
-                    let t_res = binop.apply(t1, t2)?;
-                    tv1.push(t_res);
-                    tv1.append(&mut tv2);
-                    return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
-                },
-                Operator::UnaryOp(unop) => {
-                    if tv2.is_empty() {
-                        return Err("Parse error: Nothing after binary operator.".to_string());
-                    }
-                    let t = tv2.remove(0);
-                    let t_res = unop.apply(t)?;
-                    tv1.push(t_res);
-                    tv1.append(&mut tv2);
-                    return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
-                },
-            }
+        match operator {
+            Operator::BinaryOp(binop) => {
+                let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                if tv2.is_empty() {
+                    return Err("Parse error: Nothing after binary operator.".to_string());
+                }
+                let t2 = tv2.remove(0);
+                let t_res = binop.apply(t1, t2)?;
+                tv1.push(t_res);
+                tv1.append(&mut tv2);
+                return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
+            },
+            Operator::UnaryOp(unop) => {
+                if tv2.is_empty() {
+                    return Err("Parse error: Nothing after binary operator.".to_string());
+                }
+                let t = tv2.remove(0);
+                let t_res = unop.apply(t)?;
+                tv1.push(t_res);
+                tv1.append(&mut tv2);
+                return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
+            },
         }
+    }
+
+    // トークン列が長さ1ならそのまま返す
+    if contents.len() == 1 {
+        return Ok((contents[0].clone(), bindv));
+    } else {
+        return Err("Parse error.".to_string());
     }
 }
 
