@@ -10,15 +10,15 @@ pub struct Bind {
 }
 
 pub trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
-    fn content(self: &Self) -> &Vec<T>;
-    fn new(content: Vec<T>) -> T;
+    fn contents(self: &Self) -> &Vec<T>;
+    fn new(contents: Vec<T>) -> Self;
 
     fn len(self: &Self) -> usize {
-        return self.content().len();
+        return self.contents().len();
     }
 
     fn is_empty(self: &Self) -> bool {
-        return self.content().is_empty();
+        return self.contents().is_empty();
     }
     
     fn to_string(self: &Self) -> String {
@@ -35,63 +35,33 @@ pub trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
     }
 
     fn iter(self: &Self) -> std::slice::Iter<T> {
-        return self.content().iter();
+        return self.contents().iter();
     }
 }
 
 #[derive(Clone)]
 pub struct SetList {
-    content: Vec<SetList>,
+    contents: Vec<Set>,
 }
 
-impl SetLike<Self> for SetList {
-    fn new(content: Vec<Self>) -> Self {
-        return Self {content: content};
+impl SetLike<Set> for SetList {
+    fn new(contents: Vec<Set>) -> Self {
+        return Self {contents: contents};
     }
 
-    fn content(self: &Self) -> &Vec<Self> {
-        return &self.content;
+    fn contents(self: &Self) -> &Vec<Set> {
+        return &self.contents;
     }
 }
 
 impl SetList {
-    /* fn from_tokenv(tv: Vec<Token>, bindv: Vec<Bind>) -> Result<Self, String> {
-        if tv.is_empty() {
-            panic!("SetList::create: Got empty vector.");
-        }
-        let mut tv1: Vec<Token> = tv.clone();
-        let t0 = tv1.remove(0);
-        if t0 != Token::SymbolToken("{") {
-            return Err("Parse error of set literal.".to_string());
-        }
-
-        let mut content: Vec<SetList> = Vec::new();
-        loop {
-            tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
-
-            if tv1[0] == Token::SymbolToken("}") {
-                tv1.remove(0);  // remove "}"
-                return Ok(SetList {content: content});
-            }
-            let (sl, tv2) = Self::from_tokenv(tv1)?;
-            tv1 = tv2;
-            content.push(sl);
-            
-            tv1 = Token::check_empty_and_remove_spaces(&tv1)?;
-            if tv1[0] == Token::SymbolToken(",") {
-                tv1.remove(0);
-            }
-        }
-    } */
-
     // 一意化及びソートを行う
     pub fn uniquify(self: &Self) -> Set {
         if self.is_empty() {
-            return Set {content: Vec::new()};
+            return Set::new(Vec::new());
         }
 
-        // まず，各要素をuniquify
-        let mut sv: Vec<Set> = self.iter().map(|x| x.uniquify()).collect();
+        let mut sv: Vec<Set> = self.contents.clone();
 
         // ソート
         sv.sort_by(Set::cmp);
@@ -107,22 +77,22 @@ impl SetList {
             }
         }
 
-        return Set {content: sv_ret};
+        return Set {contents: sv_ret};
     }
 }
 
 #[derive(Clone)]
 pub struct Set {
-    content: Vec<Set>,
+    contents: Vec<Set>,
 }
 
 impl SetLike<Self> for Set {
-    fn new(content: Vec<Self>) -> Self {
-        return Self {content: content};
+    fn new(contents: Vec<Self>) -> Self {
+        return Self {contents: contents};
     }
 
-    fn content(self: &Self) -> &Vec<Self> {
-        return &self.content;
+    fn contents(self: &Self) -> &Vec<Self> {
+        return &self.contents;
     }
 }
 
@@ -141,7 +111,7 @@ impl Set {
         }
         let n = std::cmp::min(a.len(), b.len());
         for i in 0..n {
-            let tmp = Self::cmp(&a.content[i], &b.content[i]);
+            let tmp = Self::cmp(&a.contents[i], &b.contents[i]);
             if tmp != Ordering::Equal {
                 return tmp;
             }
@@ -157,7 +127,7 @@ impl Set {
     }
 
     pub fn is_in(&self, set: &Self) -> bool {
-        for e in set.content() {
+        for e in set.contents() {
             if self == e {
                 return true;
             }
@@ -166,44 +136,39 @@ impl Set {
     }
 
     fn to_setlist(&self) -> SetList {
-        if self.is_empty() {
-            return SetList { content: Vec::new() };
-        }
-
-        let content: Vec<SetList> = self.iter().map(|x| x.to_setlist()).collect();
-        return SetList { content: content };
+        return SetList { contents: self.contents.clone() };
     }
 
     pub fn set_union(set1: &Set, set2: &Set) -> Set {
-        let mut content1 = set1.to_setlist().content;
-        let mut content2 = set2.to_setlist().content;
-        content1.append(&mut content2);
-        let sl = SetList { content: content1 };
+        let mut contents1 = set1.to_setlist().contents;
+        let mut contents2 = set2.to_setlist().contents;
+        contents1.append(&mut contents2);
+        let sl = SetList { contents: contents1 };
         return sl.uniquify();
     }
 
     pub fn set_intersec(set1: &Set, set2: &Set) -> Set {
-        let mut content: Vec<Set> = Vec::new();
+        let mut contents: Vec<Set> = Vec::new();
 
         for s in set1.iter() {
             if s.is_in(set2) {
-                content.push(s.clone());
+                contents.push(s.clone());
             }
         }
 
-        return Set {content: content};
+        return Set {contents: contents};
     }
 
     pub fn set_diff(set1: &Set, set2: &Set) -> Set {
-        let mut content: Vec<Set> = Vec::new();
+        let mut contents: Vec<Set> = Vec::new();
 
         for s in set1.iter() {
             if !s.is_in(set2) {
-                content.push(s.clone());
+                contents.push(s.clone());
             }
         }
 
-        return Set {content: content};
+        return Set {contents: contents};
     }
 }
 
@@ -302,7 +267,7 @@ impl Token {
     }
 
     pub fn tokenize(string: &String) -> Result<Vec<Token>, String> {
-        if string.is_empty() || string == " " {
+        if string.is_empty() {
             return Ok(Vec::new());
         }
 
@@ -311,7 +276,11 @@ impl Token {
             Some((s1, token, s2)) => {
                 let mut tv1 = Self::tokenize(&s1)?;
                 let mut tv2 = Self::tokenize(&s2)?;
-                tv1.push(token);
+
+                if token != Token::SymbolToken(" ") { // スペースはpushしない
+                    tv1.push(token);
+                }
+                
                 tv1.append(&mut tv2);
                 return Ok(tv1);
             }
@@ -326,6 +295,7 @@ impl Token {
             Self::IdentifierToken(s) => s.to_string(),
             Self::BoolToken(b) => b.to_string(),
             Self::NullToken => "".to_string(),
+            Self::FrozenToken(ftl) => ftl.to_string(),
         }
     }
 
@@ -339,20 +309,6 @@ impl Token {
         }
         s = format!("[{}]", s);
         return s;
-    }
-
-    fn check_empty_and_remove_spaces(tv: &Vec<Token>) -> Result<Vec<Token>, String> {
-        let mut tv1 = tv.clone();
-        if tv1.is_empty() {
-            return Err("Curly brace is not closed.".to_string());
-        }
-        while tv1[0] == Token::SymbolToken(" ") {
-            tv1.remove(0);
-            if tv1.is_empty() {
-                return Err("Curly brace is not closed.".to_string());
-            }
-        }
-        return Ok(tv1);
     }
 
     pub fn find_bracket(tokenv: &Vec<Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
@@ -386,8 +342,15 @@ impl Token {
 
 #[derive(Clone, PartialEq)]
 pub struct FrozenTokenList {
-    content: Vec<Token>,
+    contents: Vec<Token>,
     bound: Option<(String, String)>
+}
+
+pub fn display_bound(bound: &Option<(String, String)>) -> String {
+    match bound {
+        None => "None".to_string(),
+        Some((b,e)) => format!("({}, {})", b, e)
+    }
 }
 
 impl FrozenTokenList {
@@ -411,22 +374,22 @@ impl FrozenTokenList {
     }
 
     pub fn from_tokenv(tv: &Vec<Token>, bound: &Option<(String, String)>) -> Result<Self, String> {
-        let mut content = tv.clone();
+        let mut contents = tv.clone();
 
-        if let Some((ib, ie)) = Self::find_frozenbound(&content)? {
-            let b = content[ib].to_string();
-            let e = content[ie].to_string();
-            let mut tv1 = content[0..ib].to_vec();
-            let mut tv2 = content[ib+1..ie].to_vec();
-            let mut tv3 = content[ie+1..].to_vec();
+        if let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
+            let b = contents[ib].to_string();
+            let e = contents[ie].to_string();
+            let mut tv1 = contents[0..ib].to_vec();
+            let tv2 = contents[ib+1..ie].to_vec();
+            let mut tv3 = contents[ie+1..].to_vec();
             let token = Token::FrozenToken(Self::from_tokenv(&tv2, &Some((b, e)))?);
             tv1.push(token);
             tv1.append(&mut tv3);
-            content = tv1;
+            contents = tv1;
         }
         
         return Ok(Self {
-            content: content,
+            contents: contents,
             bound: bound.clone(),
         })
     }
@@ -436,22 +399,48 @@ impl FrozenTokenList {
     }
 
     pub fn is_empty(&self) -> bool {
-        return self.content.is_empty();
+        return self.contents.is_empty();
     }
 
     pub fn len(&self) -> usize {
-        return self.content.len();
+        return self.contents.len();
     }
 
     pub fn get(&self, i: usize) -> Option<Token> {
-        return Some(self.content.get(i)?.clone());
+        return Some(self.contents.get(i)?.clone());
     }
 
-    pub fn get_content(&self) -> &Vec<Token> {
-        return &self.content;
+    pub fn get_contents(&self) -> &Vec<Token> {
+        return &self.contents;
     }
 
     pub fn get_bound(&self) -> &Option<(String, String)> {
         return &self.bound;
+    }
+
+    pub fn bound_is_none(&self) -> bool {
+        match self.get_bound() {
+            None => return true,
+            _ => return false,
+        }
+    }
+
+    pub fn bound_is(&self, b: &str, e: &str) -> bool {
+        match self.get_bound() {
+            None => return false,
+            Some((b1, e1)) => return b1 == b && e1 == e,
+        }
+    }
+
+    pub fn to_string(&self) -> String {
+        let mut string = String::new();
+
+        for token in self.get_contents() {
+            string = format!("{}, {}", string, token.to_string());
+        }
+        string.remove(0);
+        string = format!("[{}]", string);
+
+        return string;
     }
 }

@@ -4,20 +4,74 @@ pub use self::operator::token_and_setlike::*;
 pub use self::operator::Operator;
 pub use self::operator::preset_operators;
 
-fn setlist_from_tokenv(tv: Vec<Token>, bindv: Vec<Bind>) -> Result<SetList, String> {
-    //todo
+fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
+    let mut i_ret: Option<usize> = None;
+    for i in 0..tokenv.len() {
+        if tokenv[i] == token {
+            i_ret = Some(i);
+        }
+    }
+    return i_ret;
 }
 
-fn set_from_tokenv(tv: Vec<Token>, bindv: Vec<Bind>) -> Result<Set, String> {
-    let sl = setlist_from_tokenv(tv, bindv)?;
+fn setlist_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<SetList, String> {
+    if !ftl.bound_is("{", "}") {
+        panic!("setlist_from_frozen: Irregal bound: {}", display_bound(ftl.get_bound()));
+    }
+
+    if ftl.is_empty() {
+        return Ok(SetList::new(Vec::new()))
+    }
+
+    let mut tv = ftl.get_contents().to_vec();
+    let mut contents: Vec<Set> = Vec::new();
+
+    while let Some(i) = find_token(&tv, Token::SymbolToken(",")) {
+        let tv1 = &tv[0..i].to_vec();
+        let ftl1 = FrozenTokenList::from_tokenv(&tv1, &None)?;
+        match eval(ftl1, bindv.clone())? {
+            (Token::SetToken(set), _) => contents.push(set),
+            _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
+        }
+
+        if tv.len() < i+2 {
+            return Err("Parse error: Symbol ',' found at the end of curly brace.".to_string());
+        }
+
+        tv = tv[i+1..].to_vec();
+    }
+
+    let ftl1 = FrozenTokenList::from_tokenv(&tv, &None)?;
+    match eval(ftl1, bindv)? {
+        (Token::SetToken(set), _) => contents.push(set),
+        _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
+    }
+
+    return Ok(SetList::new(contents));
+}
+
+fn set_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<Set, String> {
+    let sl = setlist_from_frozen(ftl, bindv)?;
     return Ok(sl.uniquify());
 }
 
-fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+fn find_frozen(tv: &Vec<Token>) -> Option<usize> {
+    for i in 0..tv.len() {
+        if let Token::FrozenToken(_) = tv[i] {
+            return Some(i);
+        }
+    }
+
+    return None;
+}
+
+fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
     let bound = ftl.get_bound();
     if ftl.is_empty() {
-        return Ok((Token::NullToken, bindv));
+        return Ok((Token::NullToken, bv));
     }
+
+    let mut bindv = bv;
     
     // 先頭がletキーワードだった場合の処理
     if ftl.get(0).unwrap() == Token::KeywordToken("let") {
@@ -36,7 +90,7 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
                         return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
                     }
                 }
-                let (token, _) = eval(FrozenTokenList::from_tokenv(&ftl.get_content()[3..].to_vec(), bound)?, bindv.clone())?;
+                let (token, _) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[3..].to_vec(), bound)?, bindv.clone())?;
                 let mut bindv_new = bindv.clone();
                 bindv_new.push(Bind {
                     identifier: identifier.clone(),
@@ -50,11 +104,11 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
 
     // if文の処理
     if ftl.get(0).unwrap() == Token::KeywordToken("if") {
-        match Token::find_bracket(&ftl.get_content(), Token::KeywordToken("if"), Token::KeywordToken("then")) {
+        match Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("then")) {
             Err(_) => return Err("Keyword 'then' not found after 'if' token.".to_string()),
             Ok(option_then) => { // then節が見つかった場合
                 let (_, i_then) = option_then.unwrap();
-                match Token::find_bracket(&ftl.get_content(), Token::KeywordToken("if"), Token::KeywordToken("else")) {
+                match Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("else")) {
                     Err(_) => return Err("Keyword 'else' not found after 'if' token.".to_string()),
                     Ok(option_else) => { // else節が見つかった場合
                         let (_, i_else) = option_else.unwrap();
@@ -63,9 +117,9 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
                         }
 
                         // if節を評価
-                        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_content()[1..i_then].to_vec(), bound)?, bindv.clone())?;
-                        let tokenv_then = &ftl.get_content()[i_then+1..i_else]; // then節
-                        let tokenv_else = &ftl.get_content()[i_else+1..]; // else節
+                        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[1..i_then].to_vec(), bound)?, bindv.clone())?;
+                        let tokenv_then = &ftl.get_contents()[i_then+1..i_else]; // then節
+                        let tokenv_else = &ftl.get_contents()[i_else+1..]; // else節
 
                         match token1 {
                             Token::BoolToken(b) => { // 評価結果がbool型だった場合
@@ -86,25 +140,32 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
     }
 
     // 括弧処理
-    while let Some((ib, ie)) = Token::find_bracket(&ftl.get_content(), Token::SymbolToken("("), Token::SymbolToken(")"))? {
-        let mut tv1 = ftl.get_content()[0..ib].to_vec();
-        let tv2 = ftl.get_content()[ib+1..ie].to_vec();
-        let mut tv3 = ftl.get_content()[ie+1..].to_vec();
-        let (token, bindv1) = eval(FrozenTokenList::from_tokenv(&tv2, bound)?, bindv.clone())?;
-        tv1.push(token);
-        tv1.append(&mut tv3);
-        return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv1);
+    let mut contents: Vec<Token> = ftl.get_contents().to_vec();
+    while let Some(i) = find_frozen(&contents) {
+        match contents[i].clone() {
+            Token::FrozenToken(ftl1) => {
+                if ftl1.bound_is("(", ")") {
+                    let (token, bindv1) = eval(ftl1, bindv)?;
+                    contents[i] = token;
+                    bindv = bindv1;
+                } else if ftl1.bound_is("{", "}") { // Setの場合
+                    let set = set_from_frozen(ftl1, bindv.clone())?;
+                    contents[i] = Token::SetToken(set);
+                }
+            },
+            token => panic!("eval: Function find_frozen() brought index of non-FrozenToken: {}", token.to_string()),
+        }
     }
 
     // Identifierトークンの置き換え処理
-    let mut content: Vec<Token> = Vec::new();
-    for token in ftl.get_content() {
-        content.push(Token::substitute(&token, bindv.clone())?);
+    for i in 0..contents.len() {
+        let token = &contents[i];
+        contents[i] = Token::substitute(&token, bindv.clone())?;
     }
 
     // トークン列が長さ1ならそのまま返す
-    if content.len() == 1 {
-        return Ok((content[0].clone(), bindv));
+    if contents.len() == 1 {
+        return Ok((contents[0].clone(), bindv));
     }
     
     let preset_opmap = preset_operators();
@@ -112,8 +173,8 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
     let mut priority = 11;
     let mut operator: &Operator = preset_opmap.get(&"in".to_string()).unwrap();        
 
-    for i in 0..content.len() {
-        let token: Token = content[i].clone();
+    for i in 0..contents.len() {
+        let token: Token = contents[i].clone();
 
         // tokenがOperatorかどうか調べる
         if let Some(opname) = Operator::from_token(token.clone()) {
@@ -134,8 +195,8 @@ fn eval(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), St
     match index {
         None => return Err("Parse error.".to_string()),
         Some(i) => {
-            let mut tv1: Vec<Token> = content[0..i].to_vec();
-            let mut tv2: Vec<Token> = content[i+1..].to_vec();
+            let mut tv1: Vec<Token> = contents[0..i].to_vec();
+            let mut tv2: Vec<Token> = contents[i+1..].to_vec();
 
             match operator {
                 Operator::BinaryOp(binop) => {
