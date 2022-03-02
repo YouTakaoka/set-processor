@@ -65,6 +65,13 @@ fn find_frozen(tv: &Vec<Token>) -> Option<usize> {
     return None;
 }
 
+fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, String> {
+    match result {
+        Ok(val) => Ok(val),
+        Err(_) => Err(string),
+    }
+}
+
 fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
     let bound = ftl.get_bound();
     if ftl.is_empty() {
@@ -104,38 +111,36 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
 
     // if文の処理
     if ftl.get(0).unwrap() == Token::KeywordToken("if") {
-        match Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("then")) {
-            Err(_) => return Err("Keyword 'then' not found after 'if' token.".to_string()),
-            Ok(option_then) => { // then節が見つかった場合
-                let (_, i_then) = option_then.unwrap();
-                match Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("else")) {
-                    Err(_) => return Err("Keyword 'else' not found after 'if' token.".to_string()),
-                    Ok(option_else) => { // else節が見つかった場合
-                        let (_, i_else) = option_else.unwrap();
-                        if i_then > i_else {
-                            return Err("Keyword 'then' found after 'else'.".to_string());
-                        }
+        // then節を探す(なければerror)
+        let option_then = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("then")),
+                                        "Keyword 'then' not found after 'if' token.".to_string())?;
+        let (_, i_then) = option_then.unwrap();
 
-                        // if節を評価
-                        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[1..i_then].to_vec(), bound)?, bindv.clone())?;
-                        let tokenv_then = &ftl.get_contents()[i_then+1..i_else]; // then節
-                        let tokenv_else = &ftl.get_contents()[i_else+1..]; // else節
+        // else節を探す(なければerror)
+        let option_else = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("else")),
+                                        "Keyword 'else' not found after 'if' token.".to_string())?;
+        let (_, i_else) = option_else.unwrap();
 
-                        match token1 {
-                            Token::BoolToken(b) => { // 評価結果がbool型だった場合
-                                //todo
-                                if b { // 条件式==trueの場合
-                                    return eval(FrozenTokenList::from_tokenv(&tokenv_then.to_vec(), bound)?, bindv1);
-                                } else { // 条件式==falseの場合
-                                    return eval(FrozenTokenList::from_tokenv(&tokenv_else.to_vec(), bound)?, bindv1);
-                                }
-                            },
-                            // boolじゃなかったらError
-                            _ => return Err("Type error: Non-bool value returned by the 'if' expression.".to_string()),
-                        }
-                    },
+        // thenがelseより後ろならerror
+        if i_then > i_else {
+            return Err("Keyword 'then' found after 'else'.".to_string());
+        }
+
+        // if節を評価
+        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[1..i_then].to_vec(), bound)?, bindv.clone())?;
+        let tokenv_then = &ftl.get_contents()[i_then+1..i_else]; // then節
+        let tokenv_else = &ftl.get_contents()[i_else+1..]; // else節
+        
+        match token1 {
+            Token::BoolToken(b) => { // 評価結果がbool型だった場合
+                if b { // 条件式==trueの場合
+                    return eval(FrozenTokenList::from_tokenv(&tokenv_then.to_vec(), bound)?, bindv1);
+                } else { // 条件式==falseの場合
+                    return eval(FrozenTokenList::from_tokenv(&tokenv_else.to_vec(), bound)?, bindv1);
                 }
             },
+            // boolじゃなかったらError
+            _ => return Err("Type error: Non-bool value returned by the 'if' expression.".to_string()),
         }
     }
 
