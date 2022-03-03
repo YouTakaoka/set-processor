@@ -102,29 +102,30 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
         }
 
         if let Some(Token::SymbolToken("=")) = ftl.get(2) {
-            return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
-        }
-
-        let token1 = ftl.get(1).unwrap();
-        if let Token::IdentifierToken(identifier) = &token1 {
-            for bind in &bindv {
-                if bind.identifier == identifier.clone() {
-                    return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
+            let token1 = ftl.get(1).unwrap();
+            if let Token::IdentifierToken(identifier) = &token1 {
+                for bind in &bindv {
+                    if bind.identifier == identifier.clone() {
+                        return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
+                    }
                 }
+                
+                let mut tokenv = ftl.get_contents();
+                let (token, _) = eval(FrozenTokenList::from_tokenv(tokenv.split_off(3), bound)?, &bindv)?;
+                let mut bindv_new = bindv.clone();
+                bindv_new.push(Bind {
+                    identifier: identifier.clone(),
+                    value: token.clone(),
+                });
+                return Ok((token, bindv_new));
             }
-            
-            let mut tokenv = ftl.get_contents();
-            let (token, _) = eval(FrozenTokenList::from_tokenv(tokenv.split_off(3), bound)?, &bindv)?;
-            let mut bindv_new = bindv.clone();
-            bindv_new.push(Bind {
-                identifier: identifier.clone(),
-                value: token.clone(),
-            });
-            return Ok((token, bindv_new));
+
+            // token1がIdentifierTokenでなかった場合
+            return Err(format!("Cannot use '{}' as identifier.", token1.to_string()));
         }
 
-        // token1がIdentifierTokenでなかった場合
-        return Err(format!("Cannot use '{}' as identifier.", token1.to_string()));
+        // 2番目のトークンが'='でなかった場合
+        return Err("Parse error: Not found '=' token after 'let' keyword.".to_string());
     }
 
     // if文の処理
