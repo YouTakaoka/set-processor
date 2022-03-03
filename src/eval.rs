@@ -192,34 +192,32 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
     }
 
     // Operator探し
-    let preset_opmap = preset_operators();
     let mut index: Option<usize> = None;
     let mut priority = 11;
-    let mut operator: &Operator = preset_opmap.get(&"in".to_string()).unwrap();        
 
     for i in 0..contents.len() {
         let token: Token = contents[i].clone();
 
         // tokenがOperatorかどうか調べる
-        if let Some(opname) = Operator::from_token(token) {
-            // Operatorだったら優先順位を確認
-            let op: &Operator = preset_opmap.get(&opname.to_string()).unwrap();
+        if let Some(op) = Operator::from_token(token) {
+            // OperatorだったらOperatorTokenに変換
+            contents[i] = Token::OperatorToken(op.clone());
+
+            // 優先順位を確認
             let priority1 = op.priority();
 
-            // 優先順位が既存より高ければindexと優先順位，Operatorオブジェクトを記憶
+            // 優先順位が既存より高ければindexと優先順位を記憶
             if priority1 < priority {
                 index = Some(i);
-                operator = preset_opmap.get(&opname).unwrap();
                 priority = priority1;
             }
         }    
     }
 
-    //何も見つかっていなかったらエラー
-    if let Some(i) = index {
+    if let Some(i) = index {  // Operator見つかった
         let (mut tv1, mut tv2) = split_drop(&contents, i, i);
 
-        match operator {
+        match contents[i].to_operator(&"Oops! Something is wrong.".to_string())? {
             Operator::BinaryOp(binop) => {
                 let t1:Token = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
                 if tv2.is_empty() {

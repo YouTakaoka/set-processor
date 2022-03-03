@@ -41,16 +41,23 @@ impl Token {
         }
     }
    
-    pub fn to_set(&self, mes: &String) -> Result<&Set, String> {
+    pub fn to_set(&self, mes: &String) -> Result<Set, String> {
         match self {
-            Token::SetToken(set) => Ok(set),
+            Token::SetToken(set) => Ok(set.clone()),
             _ => Err(mes.clone()),
         }
     }
 
-    pub fn to_bool(&self, mes: &String) -> Result<&bool, String> {
+    pub fn to_bool(&self, mes: &String) -> Result<bool, String> {
         match self {
-            Token::BoolToken(b) => Ok(b),
+            Token::BoolToken(b) => Ok(*b),
+            _ => Err(mes.clone()),
+        }
+    }
+
+    pub fn to_operator(&self, mes: &String) -> Result<Operator, String> {
+        match self {
+            Token::OperatorToken(op) => Ok(op.clone()),
             _ => Err(mes.clone()),
         }
     }
@@ -351,7 +358,7 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
                 //println!("{}", t2.to_string()); //tofix
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
-                Ok(Token::BoolToken(s1.is_in(s2)))
+                Ok(Token::BoolToken(s1.is_in(&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -360,7 +367,7 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
-                Ok(Token::SetToken(Set::set_diff(s1,s2)))
+                Ok(Token::SetToken(Set::set_diff(&s1,&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -369,7 +376,7 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
-                Ok(Token::SetToken(Set::set_union(s1,s2)))
+                Ok(Token::SetToken(Set::set_union(&s1,&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -378,7 +385,7 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
-                Ok(Token::SetToken(Set::set_intersec(s1,s2)))
+                Ok(Token::SetToken(Set::set_intersec(&s1,&s2)))
             },
         }),
     ];
@@ -414,10 +421,11 @@ impl Operator {
         }
     }
 
-    pub fn from_token(token: Token) -> Option<String> {
-        for opname in preset_operators().keys() {
+    pub fn from_token(token: Token) -> Option<Self> {
+        let preset_opmap = preset_operators();
+        for opname in preset_opmap.keys() {
             if token.to_string() == opname.clone() {
-                return Some(opname.to_string());
+                return Some(preset_opmap.get(opname)?.clone());
             }
         }
         return None;
