@@ -4,7 +4,7 @@ mod setlike;
 pub use self::constants::*;
 pub use self::setlike::*;
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 pub enum Token {
     SetToken(Set),
     KeywordToken(&'static str),
@@ -13,6 +13,7 @@ pub enum Token {
     BoolToken(bool),
     NullToken,
     FrozenToken(FrozenTokenList),
+    OperatorToken(Operator),
 }
 
 pub enum TokenType {
@@ -121,19 +122,19 @@ impl Token {
         return s;
     }
 
-    pub fn find_bracket(tokenv: &Vec<Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
+    pub fn find_bracket(tokenv: &Vec<&Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
         let mut ib: Option<usize> = None;
         let mut cnt = 0;
 
         for i in 0..tokenv.len() {
-            if tokenv[i] == te {
+            if *tokenv[i] == te {
                 if cnt < 1 {
                     return Err("Bracket is not closed.".to_string());
                 } else if cnt == 1 {
                     return Ok(Some((ib.unwrap(), i)));
                 }
                 cnt -= 1;
-            } else if tokenv[i] == tb {
+            } else if *tokenv[i] == tb {
                 if cnt == 0 {
                     ib = Some(i);
                 }
@@ -150,7 +151,7 @@ impl Token {
 
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(PartialEq)]
 pub struct FrozenTokenList {
     contents: Vec<Token>,
     bound: Option<(String, String)>
@@ -164,7 +165,7 @@ pub fn display_bound(bound: &Option<(String, String)>) -> String {
 }
 
 impl FrozenTokenList {
-    fn find_frozenbound(tv:&Vec<Token>) -> Result<Option<(usize, usize)>, String> {
+    fn find_frozenbound(tv:&Vec<&Token>) -> Result<Option<(usize, usize)>, String> {
         let mut i_bound: Option<(usize, usize)> = None;
 
         for (b, e) in FROZEN_BOUND {
@@ -183,15 +184,15 @@ impl FrozenTokenList {
         return Ok(i_bound);
     }
 
-    pub fn from_tokenv(tv: &Vec<Token>, bound: &Option<(String, String)>) -> Result<Self, String> {
-        let mut contents = tv.clone();
+    pub fn from_tokenv(tv: Vec<Token>, bound: &Option<(String, String)>) -> Result<Self, String> {
+        let mut contents = tv;
 
-        while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
+        while let Some((ib, ie)) = Self::find_frozenbound(&contents.iter().collect())? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
-            let mut tv1 = contents[0..ib].to_vec();
-            let tv2 = contents[ib+1..ie].to_vec();
-            let mut tv3 = contents[ie+1..].to_vec();
+            let mut tv1 = contents[0..ib];
+            let tv2 = &contents[ib+1..ie];
+            let mut tv3 = contents[ie+1..];
             let token = Token::FrozenToken(Self::from_tokenv(&tv2, &Some((b, e)))?);
             tv1.push(token);
             tv1.append(&mut tv3);
@@ -205,7 +206,7 @@ impl FrozenTokenList {
     }
 
     pub fn from_string(string: &String) -> Result<Self, String> {
-        return Self::from_tokenv(&Token::tokenize(string)?, &None);
+        return Self::from_tokenv(Token::tokenize(string)?, &None);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -216,8 +217,8 @@ impl FrozenTokenList {
         return self.contents.len();
     }
 
-    pub fn get(&self, i: usize) -> Option<Token> {
-        return Some(self.contents.get(i)?.clone());
+    pub fn get(&self, i: usize) -> Option<&Token> {
+        return Some(self.contents.get(i)?);
     }
 
     pub fn get_contents(&self) -> &Vec<Token> {
@@ -354,6 +355,12 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
 pub enum Operator {
     BinaryOp(BinaryOp),
     UnaryOp(UnaryOp),
+}
+
+impl PartialEq for Operator {
+    fn eq(&self, rhs: &Self) -> bool {
+        return self.name() == rhs.name();
+    }
 }
 
 impl Operator {

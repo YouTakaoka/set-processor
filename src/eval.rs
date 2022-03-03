@@ -2,22 +2,21 @@ mod token_and_operator;
 
 pub use self::token_and_operator::*;
 
-#[derive(Clone)]
 pub struct Bind {
     pub identifier: String,
     pub value: Token,
 }
 
-fn substitute(token: &Token, bindv: Vec<Bind>) -> Result<Token, String> {
+fn substitute(token: &Token, bindv: Vec<&Bind>) -> Result<Option<Token>, String> {
     if let Token::IdentifierToken(identifier) = token {
         for bind in bindv {
             if bind.identifier == identifier.clone() {
-                return Ok(bind.value);
+                return Ok(Some(bind.value));
             }
         }
         return Err(format!("Undefined token: {}", token.to_string()))
     }
-    return Ok(token.clone());
+    return Ok(None);
 }
 
 fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
@@ -39,13 +38,13 @@ fn setlist_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<SetList
         return Ok(SetList::new(Vec::new()))
     }
 
-    let mut tv = ftl.get_contents().to_vec();
+    let mut tv = ftl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
     while let Some(i) = find_token(&tv, Token::SymbolToken(",")) {
-        let tv1 = &tv[0..i].to_vec();
-        let ftl1 = FrozenTokenList::from_tokenv(&tv1, &None)?;
-        match eval(ftl1, bindv.clone())? {
+        let tv1 = &tv[0..i];
+        let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
+        match eval(ftl1, bindv)? {
             (Token::SetToken(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
