@@ -43,9 +43,7 @@ fn setlist_from_frozen(ftl: FrozenTokenList, bindv: &Vec<Bind>) -> Result<SetLis
     let mut contents: Vec<Set> = Vec::new();
 
     while let Some(i) = find_token(&tv, Token::SymbolToken(",")) {
-        let mut tv2 = tv.split_off(i);
-        tv2.remove(0);
-        let tv1 = tv;
+        let (tv1, tv2) = split_drop(&tv, i, i);
 
         let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
         match eval(ftl1, bindv)? {
@@ -131,30 +129,28 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
     // if文の処理
     if let Some(Token::KeywordToken("if")) = ftl.get(0) {
         // then節を探す(なければerror)
-        let option_then = rewrite_error(Token::find_bracket(&ftl.get_contents().iter().collect(), Token::KeywordToken("if"), Token::KeywordToken("then")),
-                                        "Keyword 'then' not found after 'if' token.".to_string())?;
+        let option_then = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("then")),
+                                        "Keyword 'then' not found after 'if' keyword.".to_string())?;
         let (_, i_then) = option_then.unwrap();
 
         // else節を探す(なければerror)
-        let option_else = rewrite_error(Token::find_bracket(&ftl.get_contents().iter().collect(), Token::KeywordToken("if"), Token::KeywordToken("else")),
-                                        "Keyword 'else' not found after 'if' token.".to_string())?;
+        let option_else = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("else")),
+                                        "Keyword 'else' not found after 'if' keyword.".to_string())?;
         let (_, i_else) = option_else.unwrap();
 
         // thenがelseより後ろならerror
         if i_then > i_else {
-            return Err("Keyword 'then' found after 'else'.".to_string());
+            return Err("Keyword 'else' found before 'then'.".to_string());
         }
 
         // if節、then節、else節に分解
-        let mut tokenv = ftl.get_contents();
-        let tokenv_else = tokenv.split_off(i_else + 1);
-        tokenv.pop(); // elseを削除
-        let tokenv_then = tokenv.split_off(i_then + 1);
-        tokenv.pop(); // thenを削除
-        tokenv.remove(0); // ifを削除
+        let tokenv = ftl.get_contents();
+        let (tokenv_other, tokenv_else) = split_drop(&tokenv, i_else, i_else);
+        let (mut tokenv_if, tokenv_then) = split_drop(&tokenv_other, i_then, i_then);
+        tokenv_if.remove(0);
         
         // if節を評価
-        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(tokenv, bound)?, &bindv)?;        
+        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(tokenv_if, bound)?, &bindv)?;
 
         match token1 {
             Token::BoolToken(b) => { // 評価結果がbool型だった場合
@@ -221,9 +217,7 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
 
     //何も見つかっていなかったらエラー
     if let Some(i) = index {
-        let mut tv2: Vec<Token> = contents.split_off(i + 1);
-        contents.pop();
-        let mut tv1: Vec<Token> = contents;
+        let (mut tv1, mut tv2) = split_drop(&contents, i, i);
 
         match operator {
             Operator::BinaryOp(binop) => {

@@ -125,19 +125,19 @@ impl Token {
         return s;
     }
 
-    pub fn find_bracket(tokenv: &Vec<&Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
+    pub fn find_bracket(tokenv: &Vec<Token>, tb: Token, te: Token) -> Result<Option<(usize, usize)>, String> {
         let mut ib: Option<usize> = None;
         let mut cnt = 0;
 
         for i in 0..tokenv.len() {
-            if *tokenv[i] == te {
+            if tokenv[i] == te {
                 if cnt < 1 {
                     return Err("Bracket is not closed.".to_string());
                 } else if cnt == 1 {
                     return Ok(Some((ib.unwrap(), i)));
                 }
                 cnt -= 1;
-            } else if *tokenv[i] == tb {
+            } else if tokenv[i] == tb {
                 if cnt == 0 {
                     ib = Some(i);
                 }
@@ -154,6 +154,35 @@ impl Token {
 
 }
 
+pub fn split_drop(tokenv: &Vec<Token>, i1: usize, i2: usize) -> (Vec<Token>, Vec<Token>) {
+    if i1 > i2 {
+        panic!("i1 is greater than i2. i1={} while i2={}", i1, i2);
+    }
+
+    if tokenv.len() < i2+1 {
+        panic!("Length of tokenv is too short. tokenv.len()={}, but i2={}.", tokenv.len(), i2);
+    }
+
+    let tv1 = tokenv[0..i1].to_vec();
+
+    let tv2;
+    if tokenv.len() >= i2+2 {
+        tv2 = tokenv[i2+1..].to_vec();
+    } else {
+        tv2 = Vec::new();
+    }
+    
+    return (tv1, tv2);
+}
+
+pub fn subst_range(tokenv: &Vec<Token>, i1: usize, i2: usize, token: Token) -> Vec<Token> {
+    let (tv1, tv2) = split_drop(tokenv, i1, i2);
+    let mut tv = tv1.clone();
+    tv.push(token);
+    tv.append(&mut tv2.clone());
+    return tv;
+}
+
 #[derive(Clone, PartialEq)]
 pub struct FrozenTokenList {
     contents: Vec<Token>,
@@ -168,7 +197,7 @@ pub fn display_bound(bound: &Option<(String, String)>) -> String {
 }
 
 impl FrozenTokenList {
-    fn find_frozenbound(tv:&Vec<&Token>) -> Result<Option<(usize, usize)>, String> {
+    fn find_frozenbound(tv: &Vec<Token>) -> Result<Option<(usize, usize)>, String> {
         let mut i_bound: Option<(usize, usize)> = None;
 
         for (b, e) in FROZEN_BOUND {
@@ -190,15 +219,12 @@ impl FrozenTokenList {
     pub fn from_tokenv(tv: Vec<Token>, bound: &Option<(String, String)>) -> Result<Self, String> {
         let mut contents = tv;
 
-        while let Some((ib, ie)) = Self::find_frozenbound(&contents.iter().collect())? {
+        while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
 
-            let mut tv3 = contents.split_off(ie + 1);
-            contents.pop(); // bound(後ろ側)を取る
-            let tv2 = contents.split_off(ib + 1);
-            contents.pop(); // bound(前側)を取る
-            let mut tv1 = contents;
+            let (tv_other, mut tv3) = split_drop(&contents, ie, ie);
+            let (mut tv1, tv2) = split_drop(&tv_other, ib, ib);
 
             let token = Token::FrozenToken(Self::from_tokenv(tv2, &Some((b, e)))?);
             tv1.push(token);
