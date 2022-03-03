@@ -190,10 +190,14 @@ impl FrozenTokenList {
         while let Some((ib, ie)) = Self::find_frozenbound(&contents.iter().collect())? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
-            let mut tv1 = contents[0..ib];
-            let tv2 = &contents[ib+1..ie];
-            let mut tv3 = contents[ie+1..];
-            let token = Token::FrozenToken(Self::from_tokenv(&tv2, &Some((b, e)))?);
+
+            let mut tv3 = contents.split_off(ie + 1);
+            contents.pop(); // bound(後ろ側)を取る
+            let tv2 = contents.split_off(ib + 1);
+            contents.pop(); // bound(前側)を取る
+            let mut tv1 = contents;
+
+            let token = Token::FrozenToken(Self::from_tokenv(tv2, &Some((b, e)))?);
             tv1.push(token);
             tv1.append(&mut tv3);
             contents = tv1;

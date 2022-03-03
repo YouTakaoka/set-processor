@@ -38,25 +38,24 @@ fn setlist_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<SetList
         return Ok(SetList::new(Vec::new()))
     }
 
-    let mut tv = ftl.get_contents();
+    let mut tv = *ftl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
     while let Some(i) = find_token(&tv, Token::SymbolToken(",")) {
-        let tv1 = &tv[0..i];
+        let tv2 = tv.split_off(i);
+        tv2.remove(0);
+        let tv1 = tv;
+
         let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
         match eval(ftl1, bindv)? {
             (Token::SetToken(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
 
-        if tv.len() < i+2 {
-            return Err("Parse error: Symbol ',' found at the end of curly brace.".to_string());
-        }
-
-        tv = tv[i+1..].to_vec();
+        tv = tv2;
     }
 
-    let ftl1 = FrozenTokenList::from_tokenv(&tv, &None)?;
+    let ftl1 = FrozenTokenList::from_tokenv(tv, &None)?;
     match eval(ftl1, bindv)? {
         (Token::SetToken(set), _) => contents.push(set),
         _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
