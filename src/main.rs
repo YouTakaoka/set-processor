@@ -18,7 +18,7 @@ fn main() -> std::io::Result<()> {
             break;
         }
         
-        match eval_string(&buffer, bindv.clone()) {
+        match eval_string(&buffer, &bindv) {
             Ok((token, bindv_new)) => {
                 println!("{}", token.to_string());
                 bindv = bindv_new;

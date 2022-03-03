@@ -7,7 +7,7 @@ pub struct Bind {
     pub value: Token,
 }
 
-fn substitute(token: &Token, bindv: Vec<&Bind>) -> Result<Option<Token>, String> {
+fn substitute(token: &Token, bindv: &Vec<Bind>) -> Result<Option<Token>, String> {
     if let Token::IdentifierToken(identifier) = token {
         for bind in bindv {
             if bind.identifier == identifier.clone() {
@@ -29,7 +29,7 @@ fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
     return i_ret;
 }
 
-fn setlist_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<SetList, String> {
+fn setlist_from_frozen(ftl: FrozenTokenList, bindv: &Vec<Bind>) -> Result<SetList, String> {
     if !ftl.bound_is("{", "}") {
         panic!("setlist_from_frozen: Irregal bound: {}", display_bound(ftl.get_bound()));
     }
@@ -64,7 +64,7 @@ fn setlist_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<SetList
     return Ok(SetList::new(contents));
 }
 
-fn set_from_frozen(ftl: FrozenTokenList, bindv: Vec<Bind>) -> Result<Set, String> {
+fn set_from_frozen(ftl: FrozenTokenList, bindv: &Vec<Bind>) -> Result<Set, String> {
     let sl = setlist_from_frozen(ftl, bindv)?;
     return Ok(sl.uniquify());
 }
@@ -86,7 +86,7 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), String> {
     let bound = ftl.get_bound();
     if ftl.is_empty() {
         return Ok((Token::NullToken, bv));
@@ -169,14 +169,14 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     // 括弧処理
     let mut contents: &Vec<Token> = ftl.get_contents();
     while let Some(i) = find_frozen(&contents) {
-        match contents[i].clone() {
+        match contents[i] {
             Token::FrozenToken(ftl1) => {
                 if ftl1.bound_is("(", ")") {
                     let (token, bindv1) = eval(ftl1, bindv)?;
                     contents[i] = token;
                     bindv = bindv1;
                 } else if ftl1.bound_is("{", "}") { // Setの場合
-                    let set = set_from_frozen(ftl1, bindv.clone())?;
+                    let set = set_from_frozen(ftl1, bindv)?;
                     contents[i] = Token::SetToken(set);
                 }
             },
@@ -187,7 +187,9 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     // Identifierトークンの置き換え処理
     for i in 0..contents.len() {
         let token = &contents[i];
-        contents[i] = substitute(&token, bindv.clone())?;
+        if let Some(t_ret) = substitute(&token, bindv)? {
+            contents[i] = t_ret;
+        }
     }
 
     // Operator探し
@@ -197,10 +199,10 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     let mut operator: &Operator = preset_opmap.get(&"in".to_string()).unwrap();        
 
     for i in 0..contents.len() {
-        let token: Token = contents[i].clone();
+        let token: Token = contents[i];
 
         // tokenがOperatorかどうか調べる
-        if let Some(opname) = Operator::from_token(token.clone()) {
+        if let Some(opname) = Operator::from_token(token) {
             // Operatorだったら優先順位を確認
             let op: &Operator = preset_opmap.get(&opname.to_string()).unwrap();
             let priority1 = op.priority();
@@ -216,8 +218,9 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
 
     //何も見つかっていなかったらエラー
     if let Some(i) = index {
-        let mut tv1: Vec<Token> = contents[0..i].to_vec();
-        let mut tv2: Vec<Token> = contents[i+1..].to_vec();
+        let mut tv2: &Vec<Token> = &contents.split_off(i + 1);
+        contents.pop();
+        let mut tv1: &Vec<Token> = contents;        
 
         match operator {
             Operator::BinaryOp(binop) => {
@@ -229,7 +232,7 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
                 let t_res = binop.apply(t1, t2)?;
                 tv1.push(t_res);
                 tv1.append(&mut tv2);
-                return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
+                return eval(FrozenTokenList::from_tokenv(*tv1, bound)?, bindv);
             },
             Operator::UnaryOp(unop) => {
                 if tv2.is_empty() {
@@ -239,19 +242,19 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
                 let t_res = unop.apply(t)?;
                 tv1.push(t_res);
                 tv1.append(&mut tv2);
-                return eval(FrozenTokenList::from_tokenv(&tv1, bound)?, bindv.clone());
+                return eval(FrozenTokenList::from_tokenv(*tv1, bound)?, bindv);
             },
         }
     }
 
     // トークン列が長さ1ならそのまま返す
     if contents.len() == 1 {
-        return Ok((contents[0].clone(), bindv));
+        return Ok((contents[0], bindv));
     } else {
         return Err("Parse error.".to_string());
     }
 }
 
-pub fn eval_string(s: &String, bindv: Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+pub fn eval_string(s: &String, bindv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), String> {
     return eval(FrozenTokenList::from_string(s)?, bindv);
 }
