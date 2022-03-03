@@ -1,186 +1,8 @@
-use std::cmp::Ordering;
 mod constants;
+mod setlike;
 
 pub use self::constants::*;
-
-#[derive(Clone)]
-pub struct Bind {
-    pub identifier: String,
-    pub value: Token,
-}
-
-pub trait SetLike<T> where T: std::clone::Clone, T: SetLike<T> {
-    fn contents(self: &Self) -> &Vec<T>;
-    fn new(contents: Vec<T>) -> Self;
-
-    fn len(self: &Self) -> usize {
-        return self.contents().len();
-    }
-
-    fn is_empty(self: &Self) -> bool {
-        return self.contents().is_empty();
-    }
-    
-    fn to_string(self: &Self) -> String {
-        if self.is_empty() {
-            return "{}".to_string();
-        }
-        let str_ls: Vec<String> = self.iter().map(|x| x.to_string()).collect();
-        let mut ret = String::new();
-        for s in str_ls {
-            ret = format!("{},{}", ret, s);
-        }
-        ret.remove(0);
-        return format!("{{{}}}", ret);
-    }
-
-    fn iter(self: &Self) -> std::slice::Iter<T> {
-        return self.contents().iter();
-    }
-}
-
-#[derive(Clone)]
-pub struct SetList {
-    contents: Vec<Set>,
-}
-
-impl SetLike<Set> for SetList {
-    fn new(contents: Vec<Set>) -> Self {
-        return Self {contents: contents};
-    }
-
-    fn contents(self: &Self) -> &Vec<Set> {
-        return &self.contents;
-    }
-}
-
-impl SetList {
-    // 一意化及びソートを行う
-    pub fn uniquify(self: &Self) -> Set {
-        if self.is_empty() {
-            return Set::new(Vec::new());
-        }
-
-        let mut sv: Vec<Set> = self.contents.clone();
-
-        // ソート
-        sv.sort_by(Set::cmp);
-
-        // 一意化
-        let mut tmp = sv[0].clone();
-        let mut sv_ret :Vec<Set> = Vec::new();
-        sv_ret.push(tmp.clone());
-        for i in 1..sv.len() {
-            if Set::cmp(&sv[i], &tmp) != Ordering::Equal {
-                sv_ret.push(sv[i].clone());
-                tmp = sv[i].clone();
-            }
-        }
-
-        return Set {contents: sv_ret};
-    }
-}
-
-#[derive(Clone)]
-pub struct Set {
-    contents: Vec<Set>,
-}
-
-impl SetLike<Self> for Set {
-    fn new(contents: Vec<Self>) -> Self {
-        return Self {contents: contents};
-    }
-
-    fn contents(self: &Self) -> &Vec<Self> {
-        return &self.contents;
-    }
-}
-
-impl Set {
-    // 一意化・ソート済みのSetListを入力とする
-    // 辞書式順序で比較する
-    fn cmp(a: &Set, b: &Set) -> Ordering {
-        if a.is_empty() {
-            if b.is_empty() {
-                return Ordering::Equal;
-            } else {
-                return Ordering::Less;
-            }
-        } else if b.is_empty() {
-            return Ordering::Greater;
-        }
-        let n = std::cmp::min(a.len(), b.len());
-        for i in 0..n {
-            let tmp = Self::cmp(&a.contents[i], &b.contents[i]);
-            if tmp != Ordering::Equal {
-                return tmp;
-            }
-        }
-
-        if a.len() < b.len() {
-            return Ordering::Less;
-        } else if a.len() > b.len() {
-            return Ordering::Greater;
-        } else {
-            return Ordering::Equal;
-        }
-    }
-
-    pub fn is_in(&self, set: &Self) -> bool {
-        for e in set.contents() {
-            if self == e {
-                return true;
-            }
-        }
-        return false;
-    }
-
-    fn to_setlist(&self) -> SetList {
-        return SetList { contents: self.contents.clone() };
-    }
-
-    pub fn set_union(set1: &Set, set2: &Set) -> Set {
-        let mut contents1 = set1.to_setlist().contents;
-        let mut contents2 = set2.to_setlist().contents;
-        contents1.append(&mut contents2);
-        let sl = SetList { contents: contents1 };
-        return sl.uniquify();
-    }
-
-    pub fn set_intersec(set1: &Set, set2: &Set) -> Set {
-        let mut contents: Vec<Set> = Vec::new();
-
-        for s in set1.iter() {
-            if s.is_in(set2) {
-                contents.push(s.clone());
-            }
-        }
-
-        return Set {contents: contents};
-    }
-
-    pub fn set_diff(set1: &Set, set2: &Set) -> Set {
-        let mut contents: Vec<Set> = Vec::new();
-
-        for s in set1.iter() {
-            if !s.is_in(set2) {
-                contents.push(s.clone());
-            }
-        }
-
-        return Set {contents: contents};
-    }
-}
-
-impl PartialEq for Set {
-    fn eq(self: &Self, other: &Self) -> bool {
-        return Set::cmp(self, other) == Ordering::Equal;
-    }
-
-    fn ne(self: &Self, other: &Self) -> bool {
-        return Set::cmp(self, other) != Ordering::Equal;
-    }
-}
+pub use self::setlike::*;
 
 #[derive(Clone, PartialEq)]
 pub enum Token {
@@ -215,19 +37,7 @@ impl Token {
             Token::FrozenToken(_) => TokenType::FrozenToken,
         }
     }
-
-    pub fn substitute(token: &Token, bindv: Vec<Bind>) -> Result<Token, String> {
-        if let Token::IdentifierToken(identifier) = token {
-            for bind in bindv {
-                if bind.identifier == identifier.clone() {
-                    return Ok(bind.value);
-                }
-            }
-            return Err(format!("Undefined token: {}", token.to_string()))
-        }
-        return Ok(token.clone());
-    }
-
+   
     pub fn to_set(&self, mes: &String) -> Result<&Set, String> {
         match self {
             Token::SetToken(set) => Ok(set),
@@ -442,5 +252,131 @@ impl FrozenTokenList {
         string = format!("[{}]", string);
 
         return string;
+    }
+}
+
+pub struct BinaryOp {
+    name: String,
+    f: Box<dyn Fn(Token, Token) -> Result<Token, String>>,
+    priority: usize,
+}
+
+impl BinaryOp {
+    pub fn apply(&self, t1: Token, t2: Token) -> Result<Token, String> {
+        return (self.f)(t1, t2);
+    }
+}
+
+pub struct UnaryOp {
+    name: String,
+    f: Box<dyn Fn(Token) -> Result<Token, String>>,
+    priority: usize,
+}
+
+impl UnaryOp {
+    pub fn apply(&self, t: Token) -> Result<Token, String> {
+        return (self.f)(t);
+    }
+}
+
+// presetの演算子はここに追加していく
+pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
+    let opv = vec![
+        Operator::UnaryOp(UnaryOp {
+            name: "!".to_string(),
+            priority: 5,
+            f: Box::new(|t: Token| {
+                let b = t.to_bool(&"Type Error in the first argument of unary operator.".to_string())?;
+                Ok(Token::BoolToken(!b))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "==".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1 == s2))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "!=".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1 != s2))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "in".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                //println!("{}", t2.to_string()); //tofix
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::BoolToken(s1.is_in(s2)))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "-".to_string(),
+            priority: 4,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_diff(s1,s2)))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "+".to_string(),
+            priority: 3,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_union(s1,s2)))
+            }),
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "*".to_string(),
+            priority: 2,
+            f: Box::new(|t1: Token, t2: Token| {
+                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
+                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                Ok(Token::SetToken(Set::set_intersec(s1,s2)))
+            }),
+        }),
+    ];
+
+    let opnames: Vec<String> = opv.iter().map(|x| x.name()).collect();
+    return opnames.into_iter().zip(opv.into_iter()).collect();
+}
+
+pub enum Operator {
+    BinaryOp(BinaryOp),
+    UnaryOp(UnaryOp),
+}
+
+impl Operator {
+    pub fn priority(&self) -> usize {
+        match self {
+            Self::BinaryOp(op) => op.priority,
+            Self::UnaryOp(op) => op.priority,
+        }
+    }
+
+    pub fn name(&self) -> String {
+        match self {
+            Self::BinaryOp(op) => op.name.clone(),
+            Self::UnaryOp(op) => op.name.clone(),
+        }
+    }
+
+    pub fn from_token(token: Token) -> Option<String> {
+        for opname in preset_operators().keys() {
+            if token.to_string() == opname.clone() {
+                return Some(opname.to_string());
+            }
+        }
+        return None;
     }
 }
