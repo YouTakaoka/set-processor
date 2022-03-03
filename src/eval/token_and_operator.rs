@@ -4,7 +4,7 @@ mod setlike;
 pub use self::constants::*;
 pub use self::setlike::*;
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub enum Token {
     SetToken(Set),
     KeywordToken(&'static str),
@@ -154,10 +154,10 @@ impl Token {
 
 }
 
-#[derive(PartialEq)]
+#[derive(Clone, PartialEq)]
 pub struct FrozenTokenList {
-    pub contents: Vec<Token>,
-    pub bound: Option<(String, String)>
+    contents: Vec<Token>,
+    bound: Option<(String, String)>
 }
 
 pub fn display_bound(bound: &Option<(String, String)>) -> String {
@@ -224,12 +224,12 @@ impl FrozenTokenList {
         return self.contents.len();
     }
 
-    pub fn get(&self, i: usize) -> Option<&Token> {
-        return Some(self.contents.get(i)?);
+    pub fn get(&self, i: usize) -> Option<Token> {
+        return Some(self.contents.get(i)?.clone());
     }
 
-    pub fn get_contents(&self) -> &Vec<Token> {
-        return &self.contents;
+    pub fn get_contents(&self) -> Vec<Token> {
+        return self.contents.clone();
     }
 
     pub fn get_bound(&self) -> &Option<(String, String)> {
@@ -263,9 +263,10 @@ impl FrozenTokenList {
     }
 }
 
+#[derive(Clone)]
 pub struct BinaryOp {
     name: String,
-    f: Box<dyn Fn(Token, Token) -> Result<Token, String>>,
+    f: fn(Token, Token) -> Result<Token, String>,
     priority: usize,
 }
 
@@ -275,9 +276,10 @@ impl BinaryOp {
     }
 }
 
+#[derive(Clone)]
 pub struct UnaryOp {
     name: String,
-    f: Box<dyn Fn(Token) -> Result<Token, String>>,
+    f: fn(Token) -> Result<Token, String>,
     priority: usize,
 }
 
@@ -293,65 +295,65 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
         Operator::UnaryOp(UnaryOp {
             name: "!".to_string(),
             priority: 5,
-            f: Box::new(|t: Token| {
+            f: |t: Token| {
                 let b = t.to_bool(&"Type Error in the first argument of unary operator.".to_string())?;
                 Ok(Token::BoolToken(!b))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
             priority: 4,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::BoolToken(s1 == s2))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "!=".to_string(),
             priority: 4,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::BoolToken(s1 != s2))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "in".to_string(),
             priority: 4,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 //println!("{}", t2.to_string()); //tofix
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::BoolToken(s1.is_in(s2)))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "-".to_string(),
             priority: 4,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::SetToken(Set::set_diff(s1,s2)))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "+".to_string(),
             priority: 3,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::SetToken(Set::set_union(s1,s2)))
-            }),
+            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "*".to_string(),
             priority: 2,
-            f: Box::new(|t1: Token, t2: Token| {
+            f: |t1: Token, t2: Token| {
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Token::SetToken(Set::set_intersec(s1,s2)))
-            }),
+            },
         }),
     ];
 
@@ -359,6 +361,7 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
     return opnames.into_iter().zip(opv.into_iter()).collect();
 }
 
+#[derive(Clone)]
 pub enum Operator {
     BinaryOp(BinaryOp),
     UnaryOp(UnaryOp),
