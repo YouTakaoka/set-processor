@@ -86,10 +86,10 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), String> {
-    let bound = ftl.get_bound();
+fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
+    let bound = &ftl.get_bound();
     if ftl.is_empty() {
-        return Ok((Token::NullToken, bv));
+        return Ok((Token::NullToken, *bv));
     }
 
     let mut bindv = bv;
@@ -112,13 +112,14 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
                 }
             }
             
-            let (token, _) = eval(FrozenTokenList::from_tokenv(ftl.get_contents().split_off(3), bound)?, bindv)?;
+            let mut tokenv = ftl.contents;
+            let (token, _) = eval(FrozenTokenList::from_tokenv(tokenv.split_off(3), bound)?, bindv)?;
             let mut bindv_new = bindv;
             bindv_new.push(Bind {
                 identifier: identifier.clone(),
                 value: token,
             });
-            return Ok((token, bindv_new));
+            return Ok((token, *bindv_new));
         }
 
         // token1がIdentifierTokenでなかった場合
@@ -156,9 +157,9 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
         match token1 {
             Token::BoolToken(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
-                    return eval(FrozenTokenList::from_tokenv(tokenv_then, bound)?, bindv1);
+                    return eval(FrozenTokenList::from_tokenv(tokenv_then, bound)?, &bindv1);
                 } else { // 条件式==falseの場合
-                    return eval(FrozenTokenList::from_tokenv(tokenv_else, bound)?, bindv1);
+                    return eval(FrozenTokenList::from_tokenv(tokenv_else, bound)?, &bindv1);
                 }
             },
             // boolじゃなかったらError
@@ -167,16 +168,16 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
     }
 
     // 括弧処理
-    let mut contents: &Vec<Token> = ftl.get_contents();
+    let mut contents: Vec<Token> = ftl.contents;
     while let Some(i) = find_frozen(&contents) {
-        match contents[i] {
+        match &contents[i] {
             Token::FrozenToken(ftl1) => {
                 if ftl1.bound_is("(", ")") {
-                    let (token, bindv1) = eval(ftl1, bindv)?;
+                    let (token, bindv1) = eval(*ftl1, bindv)?;
                     contents[i] = token;
-                    bindv = bindv1;
+                    bindv = &bindv1;
                 } else if ftl1.bound_is("{", "}") { // Setの場合
-                    let set = set_from_frozen(ftl1, bindv)?;
+                    let set = set_from_frozen(*ftl1, bindv)?;
                     contents[i] = Token::SetToken(set);
                 }
             },
@@ -218,9 +219,9 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
 
     //何も見つかっていなかったらエラー
     if let Some(i) = index {
-        let mut tv2: &Vec<Token> = &contents.split_off(i + 1);
+        let mut tv2: Vec<Token> = contents.split_off(i + 1);
         contents.pop();
-        let mut tv1: &Vec<Token> = contents;        
+        let mut tv1: Vec<Token> = contents;
 
         match operator {
             Operator::BinaryOp(binop) => {
@@ -232,7 +233,7 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
                 let t_res = binop.apply(t1, t2)?;
                 tv1.push(t_res);
                 tv1.append(&mut tv2);
-                return eval(FrozenTokenList::from_tokenv(*tv1, bound)?, bindv);
+                return eval(FrozenTokenList::from_tokenv(tv1, bound)?, bindv);
             },
             Operator::UnaryOp(unop) => {
                 if tv2.is_empty() {
@@ -242,19 +243,19 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), Str
                 let t_res = unop.apply(t)?;
                 tv1.push(t_res);
                 tv1.append(&mut tv2);
-                return eval(FrozenTokenList::from_tokenv(*tv1, bound)?, bindv);
+                return eval(FrozenTokenList::from_tokenv(tv1, bound)?, bindv);
             },
         }
     }
 
     // トークン列が長さ1ならそのまま返す
     if contents.len() == 1 {
-        return Ok((contents[0], bindv));
+        return Ok((contents[0], *bindv));
     } else {
         return Err("Parse error.".to_string());
     }
 }
 
-pub fn eval_string(s: &String, bindv: &Vec<Bind>) -> Result<(Token, &Vec<Bind>), String> {
+pub fn eval_string(s: &String, bindv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
     return eval(FrozenTokenList::from_string(s)?, bindv);
 }

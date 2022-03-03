@@ -24,6 +24,7 @@ pub enum TokenType {
     BoolToken,
     NullToken,
     FrozenToken,
+    OperatorToken,
 }
 
 impl Token {
@@ -36,6 +37,7 @@ impl Token {
             Token::BoolToken(_) => TokenType::BoolToken,
             Token::NullToken => TokenType::NullToken,
             Token::FrozenToken(_) => TokenType::FrozenToken,
+            Token::OperatorToken(_) => TokenType::OperatorToken,
         }
     }
    
@@ -107,6 +109,7 @@ impl Token {
             Self::BoolToken(b) => b.to_string(),
             Self::NullToken => "".to_string(),
             Self::FrozenToken(ftl) => ftl.to_string(),
+            Self::OperatorToken(op) => op.name(),
         }
     }
 
@@ -153,8 +156,8 @@ impl Token {
 
 #[derive(PartialEq)]
 pub struct FrozenTokenList {
-    contents: Vec<Token>,
-    bound: Option<(String, String)>
+    pub contents: Vec<Token>,
+    pub bound: Option<(String, String)>
 }
 
 pub fn display_bound(bound: &Option<(String, String)>) -> String {
