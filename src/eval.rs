@@ -1,8 +1,24 @@
-mod operator;
+mod token_and_operator;
 
-pub use self::operator::token_and_setlike::*;
-pub use self::operator::Operator;
-pub use self::operator::preset_operators;
+pub use self::token_and_operator::*;
+
+#[derive(Clone)]
+pub struct Bind {
+    pub identifier: String,
+    pub value: Token,
+}
+
+fn substitute(token: &Token, bindv: Vec<Bind>) -> Result<Token, String> {
+    if let Token::IdentifierToken(identifier) = token {
+        for bind in bindv {
+            if bind.identifier == identifier.clone() {
+                return Ok(bind.value);
+            }
+        }
+        return Err(format!("Undefined token: {}", token.to_string()))
+    }
+    return Ok(token.clone());
+}
 
 fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
     let mut i_ret: Option<usize> = None;
@@ -166,7 +182,7 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     // Identifierトークンの置き換え処理
     for i in 0..contents.len() {
         let token = &contents[i];
-        contents[i] = Token::substitute(&token, bindv.clone())?;
+        contents[i] = substitute(&token, bindv.clone())?;
     }
 
     // Operator探し
