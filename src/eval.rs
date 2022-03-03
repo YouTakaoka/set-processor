@@ -95,27 +95,28 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     let mut bindv = bv;
     
     // 先頭がletキーワードだった場合の処理
-    if ftl.get(0).unwrap() == Token::KeywordToken("let") {
+    if let Some(Token::KeywordToken("let")) = ftl.get(0) {
         if ftl.len() < 4 {
             return Err("Parse error: 'let' statement is too short.".to_string());
         }
 
-        if ftl.get(2).unwrap() != Token::SymbolToken("=") {
+        if let Some(Token::SymbolToken("=")) = ftl.get(2) {
             return Err("Parse error: Not found '=' token after 'let' keyword.".to_string())
         }
 
         let token1 = ftl.get(1).unwrap();
         if let Token::IdentifierToken(identifier) = &token1 {
-            for bind in bindv.clone() {
+            for bind in bindv {
                 if bind.identifier == identifier.clone() {
                     return Err(format!("Token {} is already reserved as identifier.", identifier.clone()));
                 }
             }
-            let (token, _) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[3..].to_vec(), bound)?, bindv.clone())?;
-            let mut bindv_new = bindv.clone();
+            
+            let (token, _) = eval(FrozenTokenList::from_tokenv(ftl.get_contents().split_off(3), bound)?, bindv)?;
+            let mut bindv_new = bindv;
             bindv_new.push(Bind {
                 identifier: identifier.clone(),
-                value: token.clone(),
+                value: token,
             });
             return Ok((token, bindv_new));
         }
@@ -125,14 +126,14 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     }
 
     // if文の処理
-    if ftl.get(0).unwrap() == Token::KeywordToken("if") {
+    if let Some(Token::KeywordToken("if")) = ftl.get(0) {
         // then節を探す(なければerror)
-        let option_then = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("then")),
+        let option_then = rewrite_error(Token::find_bracket(&ftl.get_contents().iter().collect(), Token::KeywordToken("if"), Token::KeywordToken("then")),
                                         "Keyword 'then' not found after 'if' token.".to_string())?;
         let (_, i_then) = option_then.unwrap();
 
         // else節を探す(なければerror)
-        let option_else = rewrite_error(Token::find_bracket(&ftl.get_contents(), Token::KeywordToken("if"), Token::KeywordToken("else")),
+        let option_else = rewrite_error(Token::find_bracket(&ftl.get_contents().iter().collect(), Token::KeywordToken("if"), Token::KeywordToken("else")),
                                         "Keyword 'else' not found after 'if' token.".to_string())?;
         let (_, i_else) = option_else.unwrap();
 
@@ -141,17 +142,23 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
             return Err("Keyword 'then' found after 'else'.".to_string());
         }
 
+        // if節、then節、else節に分解
+        let mut tokenv = ftl.get_contents();
+        let tokenv_else = tokenv.split_off(i_else + 1);
+        tokenv.pop(); // elseを削除
+        let tokenv_then = tokenv.split_off(i_then + 1);
+        tokenv.pop(); // thenを削除
+        tokenv.remove(0); // ifを削除
+        
         // if節を評価
-        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(&ftl.get_contents()[1..i_then].to_vec(), bound)?, bindv.clone())?;
-        let tokenv_then = &ftl.get_contents()[i_then+1..i_else]; // then節
-        let tokenv_else = &ftl.get_contents()[i_else+1..]; // else節
+        let (token1, bindv1) = eval(FrozenTokenList::from_tokenv(*tokenv, bound)?, bindv)?;        
 
         match token1 {
             Token::BoolToken(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
-                    return eval(FrozenTokenList::from_tokenv(&tokenv_then.to_vec(), bound)?, bindv1);
+                    return eval(FrozenTokenList::from_tokenv(tokenv_then, bound)?, bindv1);
                 } else { // 条件式==falseの場合
-                    return eval(FrozenTokenList::from_tokenv(&tokenv_else.to_vec(), bound)?, bindv1);
+                    return eval(FrozenTokenList::from_tokenv(tokenv_else, bound)?, bindv1);
                 }
             },
             // boolじゃなかったらError
@@ -160,7 +167,7 @@ fn eval(ftl: FrozenTokenList, bv: Vec<Bind>) -> Result<(Token, Vec<Bind>), Strin
     }
 
     // 括弧処理
-    let mut contents: Vec<Token> = ftl.get_contents().to_vec();
+    let mut contents: &Vec<Token> = ftl.get_contents();
     while let Some(i) = find_frozen(&contents) {
         match contents[i].clone() {
             Token::FrozenToken(ftl1) => {
