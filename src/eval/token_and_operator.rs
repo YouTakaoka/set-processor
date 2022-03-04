@@ -107,6 +107,16 @@ impl Token {
         }
     }
 
+    pub fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
+        let mut i_ret: Option<usize> = None;
+        for i in 0..tokenv.len() {
+            if tokenv[i] == token {
+                i_ret = Some(i);
+            }
+        }
+        return i_ret;
+    }
+
     pub fn to_string(self: &Self) -> String {
         match self {
             Self::SetToken(set) => set.to_string(),
@@ -429,5 +439,15 @@ impl Operator {
             }
         }
         return None;
+    }
+}
+
+pub struct Function {
+    f: fn(Vec<Token>) -> Result<Token, String>,
+}
+
+impl Function {
+    pub fn apply(&self, tv: Vec<Token>) -> Result<Token, String> {
+        return (self.f)(tv);
     }
 }

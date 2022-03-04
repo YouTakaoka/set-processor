@@ -20,16 +20,6 @@ fn substitute(token: &Token, bindv: &Vec<Bind>) -> Result<Option<Token>, String>
     return Ok(None);
 }
 
-fn find_token(tokenv: &Vec<Token>, token: Token) -> Option<usize> {
-    let mut i_ret: Option<usize> = None;
-    for i in 0..tokenv.len() {
-        if tokenv[i] == token {
-            i_ret = Some(i);
-        }
-    }
-    return i_ret;
-}
-
 fn setlist_from_frozen(ftl: FrozenTokenList, bindv: &Vec<Bind>) -> Result<SetList, String> {
     if !ftl.bound_is("{", "}") {
         panic!("setlist_from_frozen: Irregal bound: {}", display_bound(ftl.get_bound()));
@@ -42,7 +32,7 @@ fn setlist_from_frozen(ftl: FrozenTokenList, bindv: &Vec<Bind>) -> Result<SetLis
     let mut tv = ftl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
-    while let Some(i) = find_token(&tv, Token::SymbolToken(",")) {
+    while let Some(i) = Token::find_token(&tv, Token::SymbolToken(",")) {
         let (tv1, tv2) = split_drop(&tv, i, i);
 
         let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
@@ -83,6 +73,26 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
         Ok(val) => Ok(val),
         Err(_) => Err(string),
     }
+}
+
+fn apply(f: Function, ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<Token, String> {
+    if !ftl.bound_is("(", ")") {
+        panic!("Token '(' must follow just after a function.");
+    }
+
+    let mut tv = Vec::new();
+    let mut contents = ftl.get_contents();
+    while let Some(i) = Token::find_token(&contents, Token::SymbolToken(",")) {
+        let (tv1, tv2) = split_drop(&contents, i, i);
+        contents = tv2;
+        let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
+        let (token, _) = eval(ftl1, bv)?;
+        tv.push(token);
+        //todo
+    }
+
+    let token = f.apply(tv);
+    return token;
 }
 
 fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), String> {
