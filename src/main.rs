@@ -19,8 +19,8 @@ fn main() -> std::io::Result<()> {
         }
         
         match eval_string(&buffer, &bindv) {
-            Ok((token, bindv_new)) => {
-                println!("{}", token.to_string());
+            Ok((word, bindv_new)) => {
+                println!("{}", word.to_string());
                 bindv = bindv_new;
             },
             Err(e) => println!("{}", e),
