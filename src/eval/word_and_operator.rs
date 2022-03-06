@@ -456,3 +456,57 @@ impl Function {
         return (self.f)(tv);
     }
 }
+
+
+pub enum Token {
+    SymbolToken(&'static str),
+    KeywordToken(&'static str),
+    IdentifierToken(String),
+}
+
+impl Token {
+    pub fn split_by_token(string: &String) -> Option<(String, Word, String)> {
+        // Symbolから順番にwordを探してsplitしていく
+        for symbol in SYMBOL_LIST {
+            if let Some(n) = string.find(symbol) {
+                let s1 = &string[0..n];
+                let s2 = &string[n + symbol.len()..];
+                let word = Word::SymbolWord(symbol);
+                return Some((s1.to_string(), word, s2.to_string()));
+            }
+        }
+
+        for kw in KEYWORD_LIST {
+            if let Some(n) = string.find(kw) {
+                let s1 = &string[0..n];
+                let s2 = &string[n + kw.len()..];
+                let word = Word::KeywordWord(kw);
+                return Some((s1.to_string(), word, s2.to_string()));
+            }
+        }
+
+        // SymbolWordもKeywordWordも見つからなければIdentifierWordと見做す
+        return Some(("".to_string(), Word::IdentifierWord(string.clone()), "".to_string()));
+    }
+
+    pub fn tokenize(string: &String) -> Result<Vec<Word>, String> {
+        if string.is_empty() {
+            return Ok(Vec::new());
+        }
+
+        match Self::split_by_token(string) {
+            None => return Err("Parse error: Failed to wordize.".to_string()),
+            Some((s1, word, s2)) => {
+                let mut tv1 = Self::tokenize(&s1)?;
+                let mut tv2 = Self::tokenize(&s2)?;
+
+                if word != Word::SymbolWord(" ") { // スペースはpushしない
+                    tv1.push(word);
+                }
+                
+                tv1.append(&mut tv2);
+                return Ok(tv1);
+            }
+        }
+    }
+}
