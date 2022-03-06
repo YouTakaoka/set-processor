@@ -86,10 +86,13 @@ fn apply(f: Function, ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<Token, Str
         let (tv1, tv2) = split_drop(&contents, i, i);
         contents = tv2;
         let ftl1 = FrozenTokenList::from_tokenv(tv1, &None)?;
-        let (token, _) = eval(ftl1, bv)?;
-        tv.push(token);
-        //todo
+        let (token1, _) = eval(ftl1, bv)?;
+        tv.push(token1);
     }
+
+    let ftl1 = FrozenTokenList::from_tokenv(contents, &None)?;
+    let (token1, _) = eval(ftl1, bv)?;
+    tv.push(token1);
 
     let token = f.apply(tv);
     return token;
@@ -175,8 +178,23 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
         }
     }
 
-    // 括弧処理
+    // Identifierトークンの置き換え処理
+    // 注：関数処理より前にやること！
     let mut contents: Vec<Token> = ftl.get_contents();
+    for i in 0..contents.len() {
+        let token = &contents[i];
+        if let Some(t_ret) = substitute(&token, &bindv)? {
+            contents[i] = t_ret;
+        }
+    }
+
+    // 関数処理
+    // 注: 括弧処理より前にやること！
+    // 注: ループではなく再帰で処理すること！(オペレータや関数を返す関数があり得るため)
+    // 先に全部FunctionTokenで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
+    //todo
+
+    // 括弧処理
     while let Some(i) = find_frozen(&contents) {
         match contents[i].clone() {
             Token::FrozenToken(ftl1) => {
@@ -190,14 +208,6 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
                 }
             },
             token => panic!("eval: Function find_frozen() brought index of non-FrozenToken: {}", token.to_string()),
-        }
-    }
-
-    // Identifierトークンの置き換え処理
-    for i in 0..contents.len() {
-        let token = &contents[i];
-        if let Some(t_ret) = substitute(&token, &bindv)? {
-            contents[i] = t_ret;
         }
     }
 
@@ -224,6 +234,8 @@ fn eval(ftl: FrozenTokenList, bv: &Vec<Bind>) -> Result<(Token, Vec<Bind>), Stri
         }    
     }
 
+    // Operator処理
+    // 注: ループではなく再帰で処理すること！(オペレータや関数を返すOperatorがあり得るため)
     if let Some(i) = index {  // Operator見つかった
         let (mut tv1, mut tv2) = split_drop(&contents, i, i);
 
