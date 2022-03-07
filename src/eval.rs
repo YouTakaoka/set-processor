@@ -20,32 +20,32 @@ fn substitute(word: &Word, bindv: &Vec<Bind>) -> Result<Option<Word>, String> {
     return Ok(None);
 }
 
-fn setlist_from_frozen(ftl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList, String> {
-    if !ftl.bound_is("{", "}") {
-        panic!("setlist_from_frozen: Irregal bound: {}", display_bound(ftl.get_bound()));
+fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList, String> {
+    if !fwl.bound_is("{", "}") {
+        panic!("setlist_from_frozen: Irregal bound: {}", display_bound(fwl.get_bound()));
     }
 
-    if ftl.is_empty() {
+    if fwl.is_empty() {
         return Ok(SetList::new(Vec::new()))
     }
 
-    let mut tv = ftl.get_contents();
+    let mut wv = fwl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
-    while let Some(i) = Word::find_word(&tv, Word::SymbolWord(",")) {
-        let (tv1, tv2) = split_drop(&tv, i, i);
+    while let Some(i) = Word::find_word(&wv, Word::SymbolWord(",")) {
+        let (wv1, wv2) = split_drop(&wv, i, i);
 
-        let ftl1 = FrozenWordList::from_wordv(tv1, &None)?;
-        match eval(ftl1, bindv)? {
+        let fwl1 = FrozenWordList::from_wordv(wv1, &None)?;
+        match eval(fwl1, bindv)? {
             (Word::SetWord(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
 
-        tv = tv2;
+        wv = wv2;
     }
 
-    let ftl1 = FrozenWordList::from_wordv(tv, &None)?;
-    match eval(ftl1, bindv)? {
+    let fwl1 = FrozenWordList::from_wordv(wv, &None)?;
+    match eval(fwl1, bindv)? {
         (Word::SetWord(set), _) => contents.push(set),
         _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
     }
@@ -53,14 +53,14 @@ fn setlist_from_frozen(ftl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
     return Ok(SetList::new(contents));
 }
 
-fn set_from_frozen(ftl: FrozenWordList, bindv: &Vec<Bind>) -> Result<Set, String> {
-    let sl = setlist_from_frozen(ftl, bindv)?;
+fn set_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<Set, String> {
+    let sl = setlist_from_frozen(fwl, bindv)?;
     return Ok(sl.uniquify());
 }
 
-fn find_frozen(tv: &Vec<Word>) -> Option<usize> {
-    for i in 0..tv.len() {
-        if let Word::FrozenWord(_) = tv[i] {
+fn find_frozen(wv: &Vec<Word>) -> Option<usize> {
+    for i in 0..wv.len() {
+        if let Word::FrozenWord(_) = wv[i] {
             return Some(i);
         }
     }
@@ -75,45 +75,45 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn apply(f: Function, ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, String> {
-    if !ftl.bound_is("(", ")") {
+fn apply(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, String> {
+    if !fwl.bound_is("(", ")") {
         panic!("Word '(' must follow just after a function.");
     }
 
-    let mut tv = Vec::new();
-    let mut contents = ftl.get_contents();
+    let mut wv = Vec::new();
+    let mut contents = fwl.get_contents();
     while let Some(i) = Word::find_word(&contents, Word::SymbolWord(",")) {
-        let (tv1, tv2) = split_drop(&contents, i, i);
-        contents = tv2;
-        let ftl1 = FrozenWordList::from_wordv(tv1, &None)?;
-        let (word1, _) = eval(ftl1, bv)?;
-        tv.push(word1);
+        let (wv1, wv2) = split_drop(&contents, i, i);
+        contents = wv2;
+        let fwl1 = FrozenWordList::from_wordv(wv1, &None)?;
+        let (word1, _) = eval(fwl1, bv)?;
+        wv.push(word1);
     }
 
-    let ftl1 = FrozenWordList::from_wordv(contents, &None)?;
-    let (word1, _) = eval(ftl1, bv)?;
-    tv.push(word1);
+    let fwl1 = FrozenWordList::from_wordv(contents, &None)?;
+    let (word1, _) = eval(fwl1, bv)?;
+    wv.push(word1);
 
-    let word = f.apply(tv);
+    let word = f.apply(wv);
     return word;
 }
 
-fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
-    let bound = &ftl.get_bound();
-    if ftl.is_empty() {
+fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
+    let bound = &fwl.get_bound();
+    if fwl.is_empty() {
         return Ok((Word::NullWord, bv.clone()));
     }
 
     let mut bindv = bv.clone();
     
     // 先頭がletキーワードだった場合の処理
-    if let Some(Word::KeywordWord("let")) = ftl.get(0) {
-        if ftl.len() < 4 {
+    if let Some(Word::KeywordWord("let")) = fwl.get(0) {
+        if fwl.len() < 4 {
             return Err("Parse error: 'let' statement is too short.".to_string());
         }
 
-        if let Some(Word::SymbolWord("=")) = ftl.get(2) {
-            let word1 = ftl.get(1).unwrap();
+        if let Some(Word::SymbolWord("=")) = fwl.get(2) {
+            let word1 = fwl.get(1).unwrap();
             if let Word::IdentifierWord(identifier) = &word1 {
                 for bind in &bindv {
                     if bind.identifier == identifier.clone() {
@@ -121,7 +121,7 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
                     }
                 }
                 
-                let mut wordv = ftl.get_contents();
+                let mut wordv = fwl.get_contents();
                 let (word, _) = eval(FrozenWordList::from_wordv(wordv.split_off(3), bound)?, &bindv)?;
                 let mut bindv_new = bindv.clone();
                 bindv_new.push(Bind {
@@ -140,14 +140,14 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     }
 
     // if文の処理
-    if let Some(Word::KeywordWord("if")) = ftl.get(0) {
+    if let Some(Word::KeywordWord("if")) = fwl.get(0) {
         // then節を探す(なければerror)
-        let option_then = rewrite_error(Word::find_bracket(&ftl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("then")),
+        let option_then = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("then")),
                                         "Keyword 'then' not found after 'if' keyword.".to_string())?;
         let (_, i_then) = option_then.unwrap();
 
         // else節を探す(なければerror)
-        let option_else = rewrite_error(Word::find_bracket(&ftl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("else")),
+        let option_else = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("else")),
                                         "Keyword 'else' not found after 'if' keyword.".to_string())?;
         let (_, i_else) = option_else.unwrap();
 
@@ -157,7 +157,7 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         }
 
         // if節、then節、else節に分解
-        let wordv = ftl.get_contents();
+        let wordv = fwl.get_contents();
         let (wordv_other, wordv_else) = split_drop(&wordv, i_else, i_else);
         let (mut wordv_if, wordv_then) = split_drop(&wordv_other, i_then, i_then);
         wordv_if.remove(0);
@@ -180,7 +180,7 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
 
     // Identifierトークンの置き換え処理
     // 注：関数処理より前にやること！
-    let mut contents: Vec<Word> = ftl.get_contents();
+    let mut contents: Vec<Word> = fwl.get_contents();
     for i in 0..contents.len() {
         let word = &contents[i];
         if let Some(t_ret) = substitute(&word, &bindv)? {
@@ -197,13 +197,13 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // 括弧処理
     while let Some(i) = find_frozen(&contents) {
         match contents[i].clone() {
-            Word::FrozenWord(ftl1) => {
-                if ftl1.bound_is("(", ")") {
-                    let (word, bindv1) = eval(ftl1, &bindv)?;
+            Word::FrozenWord(fwl1) => {
+                if fwl1.bound_is("(", ")") {
+                    let (word, bindv1) = eval(fwl1, &bindv)?;
                     contents[i] = word;
                     bindv = bindv1;
-                } else if ftl1.bound_is("{", "}") { // Setの場合
-                    let set = set_from_frozen(ftl1, &bindv)?;
+                } else if fwl1.bound_is("{", "}") { // Setの場合
+                    let set = set_from_frozen(fwl1, &bindv)?;
                     contents[i] = Word::SetWord(set);
                 }
             },
@@ -237,29 +237,29 @@ fn eval(ftl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // Operator処理
     // 注: ループではなく再帰で処理すること！(オペレータや関数を返すOperatorがあり得るため)
     if let Some(i) = index {  // Operator見つかった
-        let (mut tv1, mut tv2) = split_drop(&contents, i, i);
+        let (mut wv1, mut wv2) = split_drop(&contents, i, i);
 
         match contents[i].to_operator(&"Oops! Something is wrong.".to_string())? {
             Operator::BinaryOp(binop) => {
-                let t1:Word = tv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
-                if tv2.is_empty() {
+                let t1:Word = wv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                if wv2.is_empty() {
                     return Err("Parse error: Nothing after binary operator.".to_string());
                 }
-                let t2 = tv2.remove(0);
+                let t2 = wv2.remove(0);
                 let t_res = binop.apply(t1, t2)?;
-                tv1.push(t_res);
-                tv1.append(&mut tv2);
-                return eval(FrozenWordList::from_wordv(tv1, bound)?, &bindv);
+                wv1.push(t_res);
+                wv1.append(&mut wv2);
+                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindv);
             },
             Operator::UnaryOp(unop) => {
-                if tv2.is_empty() {
+                if wv2.is_empty() {
                     return Err("Parse error: Nothing after binary operator.".to_string());
                 }
-                let t = tv2.remove(0);
+                let t = wv2.remove(0);
                 let t_res = unop.apply(t)?;
-                tv1.push(t_res);
-                tv1.append(&mut tv2);
-                return eval(FrozenWordList::from_wordv(tv1, bound)?, &bindv);
+                wv1.push(t_res);
+                wv1.append(&mut wv2);
+                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindv);
             },
         }
     }
