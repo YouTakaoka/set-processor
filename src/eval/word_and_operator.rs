@@ -89,6 +89,7 @@ impl Word {
         return Some(("".to_string(), Word::IdentifierWord(string.clone()), "".to_string()));
     }
 
+    // to remove
     pub fn wordize(string: &String) -> Result<Vec<Word>, String> {
         if string.is_empty() {
             return Ok(Vec::new());
@@ -97,15 +98,15 @@ impl Word {
         match Self::split_by_word(string) {
             None => return Err("Parse error: Failed to wordize.".to_string()),
             Some((s1, word, s2)) => {
-                let mut tv1 = Self::wordize(&s1)?;
-                let mut tv2 = Self::wordize(&s2)?;
+                let mut wv1 = Self::wordize(&s1)?;
+                let mut wv2 = Self::wordize(&s2)?;
 
                 if word != Word::SymbolWord(" ") { // スペースはpushしない
-                    tv1.push(word);
+                    wv1.push(word);
                 }
                 
-                tv1.append(&mut tv2);
-                return Ok(tv1);
+                wv1.append(&mut wv2);
+                return Ok(wv1);
             }
         }
     }
@@ -128,15 +129,15 @@ impl Word {
             Self::IdentifierWord(s) => s.to_string(),
             Self::BoolWord(b) => b.to_string(),
             Self::NullWord => "".to_string(),
-            Self::FrozenWord(ftl) => ftl.to_string(),
+            Self::FrozenWord(fwl) => fwl.to_string(),
             Self::OperatorWord(op) => op.name(),
             Self::FunctionWord(_) => "(Function)".to_string(),
         }
     }
 
-    pub fn wordv_to_string(tv: &Vec<Word>) -> String {
+    pub fn wordv_to_string(wv: &Vec<Word>) -> String {
         let mut s = "".to_string();
-        for word in tv {
+        for word in wv {
             s = format!("{}'{}',", s, word.to_string());
         }
         if !s.is_empty() {
@@ -184,24 +185,24 @@ pub fn split_drop(wordv: &Vec<Word>, i1: usize, i2: usize) -> (Vec<Word>, Vec<Wo
         panic!("Length of wordv is too short. wordv.len()={}, but i2={}.", wordv.len(), i2);
     }
 
-    let tv1 = wordv[0..i1].to_vec();
+    let wv1 = wordv[0..i1].to_vec();
 
-    let tv2;
+    let wv2;
     if wordv.len() >= i2+2 {
-        tv2 = wordv[i2+1..].to_vec();
+        wv2 = wordv[i2+1..].to_vec();
     } else {
-        tv2 = Vec::new();
+        wv2 = Vec::new();
     }
     
-    return (tv1, tv2);
+    return (wv1, wv2);
 }
 
 pub fn subst_range(wordv: &Vec<Word>, i1: usize, i2: usize, word: Word) -> Vec<Word> {
-    let (tv1, tv2) = split_drop(wordv, i1, i2);
-    let mut tv = tv1.clone();
-    tv.push(word);
-    tv.append(&mut tv2.clone());
-    return tv;
+    let (wv1, wv2) = split_drop(wordv, i1, i2);
+    let mut wv = wv1.clone();
+    wv.push(word);
+    wv.append(&mut wv2.clone());
+    return wv;
 }
 
 #[derive(Clone, PartialEq)]
@@ -218,11 +219,11 @@ pub fn display_bound(bound: &Option<(String, String)>) -> String {
 }
 
 impl FrozenWordList {
-    fn find_frozenbound(tv: &Vec<Word>) -> Result<Option<(usize, usize)>, String> {
+    fn find_frozenbound(wv: &Vec<Word>) -> Result<Option<(usize, usize)>, String> {
         let mut i_bound: Option<(usize, usize)> = None;
 
         for (b, e) in FROZEN_BOUND {
-            if let Some((ib, ie)) = Word::find_bracket(tv, Word::SymbolWord(b), Word::SymbolWord(e))? {
+            if let Some((ib, ie)) = Word::find_bracket(wv, Word::SymbolWord(b), Word::SymbolWord(e))? {
                 match i_bound {
                     None => i_bound = Some((ib, ie)),
                     Some((ib_old, _)) => {
@@ -237,20 +238,20 @@ impl FrozenWordList {
         return Ok(i_bound);
     }
 
-    pub fn from_wordv(tv: Vec<Word>, bound: &Option<(String, String)>) -> Result<Self, String> {
-        let mut contents = tv;
+    pub fn from_wordv(wv: Vec<Word>, bound: &Option<(String, String)>) -> Result<Self, String> {
+        let mut contents = wv;
 
         while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
 
-            let (tv_other, mut tv3) = split_drop(&contents, ie, ie);
-            let (mut tv1, tv2) = split_drop(&tv_other, ib, ib);
+            let (wv_other, mut wv3) = split_drop(&contents, ie, ie);
+            let (mut wv1, wv2) = split_drop(&wv_other, ib, ib);
 
-            let word = Word::FrozenWord(Self::from_wordv(tv2, &Some((b, e)))?);
-            tv1.push(word);
-            tv1.append(&mut tv3);
-            contents = tv1;
+            let word = Word::FrozenWord(Self::from_wordv(wv2, &Some((b, e)))?);
+            wv1.push(word);
+            wv1.append(&mut wv3);
+            contents = wv1;
         }
         
         return Ok(Self {
@@ -452,8 +453,8 @@ pub struct Function {
 }
 
 impl Function {
-    pub fn apply(&self, tv: Vec<Word>) -> Result<Word, String> {
-        return (self.f)(tv);
+    pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
+        return (self.f)(wv);
     }
 }
 
@@ -497,15 +498,15 @@ impl Token {
         match Self::split_by_token(string) {
             None => return Err("Parse error: Failed to wordize.".to_string()),
             Some((s1, word, s2)) => {
-                let mut tv1 = Self::tokenize(&s1)?;
-                let mut tv2 = Self::tokenize(&s2)?;
+                let mut wv1 = Self::tokenize(&s1)?;
+                let mut wv2 = Self::tokenize(&s2)?;
 
                 if word != Word::SymbolWord(" ") { // スペースはpushしない
-                    tv1.push(word);
+                    wv1.push(word);
                 }
                 
-                tv1.append(&mut tv2);
-                return Ok(tv1);
+                wv1.append(&mut wv2);
+                return Ok(wv1);
             }
         }
     }
