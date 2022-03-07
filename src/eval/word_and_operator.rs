@@ -89,6 +89,7 @@ impl Word {
         return Some(("".to_string(), Word::IdentifierWord(string.clone()), "".to_string()));
     }
 
+    // to remove
     pub fn wordize(string: &String) -> Result<Vec<Word>, String> {
         if string.is_empty() {
             return Ok(Vec::new());
