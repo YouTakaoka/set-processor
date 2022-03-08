@@ -370,7 +370,6 @@ pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
             name: "in".to_string(),
             priority: 4,
             f: |t1: Word, t2: Word| {
-                //println!("{}", t2.to_string()); //tofix
                 let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
                 let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
                 Ok(Word::BoolWord(s1.is_in(&s2)))
