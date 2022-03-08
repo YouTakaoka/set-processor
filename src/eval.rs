@@ -219,10 +219,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         let word: Word = contents[i].clone();
 
         // wordがOperatorかどうか調べる
-        if let Some(op) = Operator::from_word(word) {
-            // OperatorだったらOperatorWordに変換
-            contents[i] = Word::OperatorWord(op.clone());
-
+        if let Ok(op) = word.to_operator(&"".to_string()) {
             // 優先順位を確認
             let priority1 = op.priority();
 

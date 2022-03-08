@@ -66,24 +66,24 @@ impl Word {
         }
     }
    
-    pub fn to_set(&self, mes: &String) -> Result<Set, String> {
+    pub fn to_set(&self, mes: &str) -> Result<Set, String> {
         match self {
             Word::SetWord(set) => Ok(set.clone()),
-            _ => Err(mes.clone()),
+            _ => Err(mes.to_string()),
         }
     }
 
-    pub fn to_bool(&self, mes: &String) -> Result<bool, String> {
+    pub fn to_bool(&self, mes: &str) -> Result<bool, String> {
         match self {
             Word::BoolWord(b) => Ok(*b),
-            _ => Err(mes.clone()),
+            _ => Err(mes.to_string()),
         }
     }
 
-    pub fn to_operator(&self, mes: &String) -> Result<Operator, String> {
+    pub fn to_operator(&self, mes: &str) -> Result<Operator, String> {
         match self {
             Word::OperatorWord(op) => Ok(op.clone()),
-            _ => Err(mes.clone()),
+            _ => Err(mes.to_string()),
         }
     }
 
@@ -331,7 +331,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "!".to_string(),
             priority: 5,
             f: |t: Word| {
-                let b = t.to_bool(&"Type Error in the first argument of unary operator.".to_string())?;
+                let b = t.to_bool("Type Error in the first argument of unary operator.")?;
                 Ok(Word::BoolWord(!b))
             },
         }),
@@ -339,8 +339,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "==".to_string(),
             priority: 4,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::BoolWord(s1 == s2))
             },
         }),
@@ -348,8 +348,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "!=".to_string(),
             priority: 4,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::BoolWord(s1 != s2))
             },
         }),
@@ -357,8 +357,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "in".to_string(),
             priority: 4,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::BoolWord(s1.is_in(&s2)))
             },
         }),
@@ -366,8 +366,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "-".to_string(),
             priority: 4,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::SetWord(Set::set_diff(&s1,&s2)))
             },
         }),
@@ -375,8 +375,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "+".to_string(),
             priority: 3,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::SetWord(Set::set_union(&s1,&s2)))
             },
         }),
@@ -384,8 +384,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "*".to_string(),
             priority: 2,
             f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set(&"Type Error in the first argument of binary operator.".to_string())?;
-                let s2 = t2.to_set(&"Type Error in the second argument of binary operator.".to_string())?;
+                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
+                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
                 Ok(Word::SetWord(Set::set_intersec(&s1,&s2)))
             },
         }),
