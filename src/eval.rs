@@ -75,7 +75,7 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn apply(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, String> {
+fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, String> {
     if !fwl.bound_is("(", ")") {
         panic!("Word '(' must follow just after a function.");
     }
@@ -192,7 +192,18 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // 注: 括弧処理より前にやること！
     // 注: ループではなく再帰で処理すること！(オペレータや関数を返す関数があり得るため)
     // 先に全部FunctionWordで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
-    //todo
+    for i in 0..contents.len() {
+        if let Word::FunctionWord(f) = &contents[i] {
+            if let Some(Word::FrozenWord(fwl)) = contents.get(i+1) {
+                if fwl.bound_is("(", ")") {
+                    let word = apply_function(f.clone(), fwl.clone(), bv)?;
+                    let contents_new = subst_range(&contents, i, i + 1, word);
+                    let fwl_new = FrozenWordList::from_wordv(contents_new, bound)?;
+                    return eval(fwl_new, bv);
+                }
+            }
+        }
+    }
 
     // 括弧処理
     while let Some(i) = find_frozen(&contents) {

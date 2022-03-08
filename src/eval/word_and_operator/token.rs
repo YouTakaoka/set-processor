@@ -44,15 +44,15 @@ impl Token {
         match Self::split_by_token(string) {
             None => return Err("Parse error: Failed to tokenize.".to_string()),
             Some((s1, token, s2)) => {
-                let mut wv1 = Self::tokenize(&s1)?;
-                let mut wv2 = Self::tokenize(&s2)?;
+                let mut tv1 = Self::tokenize(&s1)?;
+                let mut tv2 = Self::tokenize(&s2)?;
 
                 if token != Token::SymbolToken(" ") { // スペースはpushしない
-                    wv1.push(token);
+                    tv1.push(token);
                 }
                 
-                wv1.append(&mut wv2);
-                return Ok(wv1);
+                tv1.append(&mut tv2);
+                return Ok(tv1);
             }
         }
     }

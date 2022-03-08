@@ -39,6 +39,10 @@ impl Word {
                     return Word::OperatorWord(op.clone());
                 }
 
+                if let Some(f) = preset_functions().get(s) {
+                    return Word::FunctionWord(f.clone());
+                }
+
                 return Word::KeywordWord(s);
             },
             Token::SymbolToken(s) => {
@@ -46,6 +50,10 @@ impl Word {
                     return Word::OperatorWord(op.clone());
                 }
 
+                if let Some(f) = preset_functions().get(s) {
+                    return Word::FunctionWord(f.clone());
+                }
+                
                 return Word::SymbolWord(s);
             },
             Token::IdentifierToken(s) => {
@@ -444,4 +452,18 @@ impl Function {
     pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
         return (self.f)(wv);
     }
+}
+
+// presetの関数はここに追加
+pub fn preset_functions() -> std::collections::HashMap<&'static str, Function> {
+    let mut funcmap = std::collections::HashMap::new();
+
+    funcmap.insert("is_empty", Function {
+            f: |wv: Vec<Word>| {
+                let set = wv[0].to_set("Type error in the first argument: Set expected")?;
+                return Ok(Word::BoolWord(set.is_empty()));
+            }
+        });
+
+    return funcmap;
 }
