@@ -35,7 +35,7 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
     while let Some(i) = Word::find_word(&wv, Word::SymbolWord(",")) {
         let (wv1, wv2) = split_drop(&wv, i, i);
 
-        let fwl1 = FrozenWordList::from_wordv(wv1, &None)?;
+        let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
         match eval(fwl1, bindv)? {
             (Word::SetWord(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
@@ -44,7 +44,7 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
         wv = wv2;
     }
 
-    let fwl1 = FrozenWordList::from_wordv(wv, &None)?;
+    let fwl1 = FrozenWordList::from_wordv(wv, None)?;
     match eval(fwl1, bindv)? {
         (Word::SetWord(set), _) => contents.push(set),
         _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
@@ -85,12 +85,12 @@ fn apply(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, Strin
     while let Some(i) = Word::find_word(&contents, Word::SymbolWord(",")) {
         let (wv1, wv2) = split_drop(&contents, i, i);
         contents = wv2;
-        let fwl1 = FrozenWordList::from_wordv(wv1, &None)?;
+        let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
         let (word1, _) = eval(fwl1, bv)?;
         wv.push(word1);
     }
 
-    let fwl1 = FrozenWordList::from_wordv(contents, &None)?;
+    let fwl1 = FrozenWordList::from_wordv(contents, None)?;
     let (word1, _) = eval(fwl1, bv)?;
     wv.push(word1);
 
@@ -99,7 +99,7 @@ fn apply(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, Strin
 }
 
 fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
-    let bound = &fwl.get_bound();
+    let bound = fwl.get_bound().clone();
     if fwl.is_empty() {
         return Ok((Word::NullWord, bv.clone()));
     }
@@ -163,7 +163,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         wordv_if.remove(0);
         
         // if節を評価
-        let (word1, bindv1) = eval(FrozenWordList::from_wordv(wordv_if, bound)?, &bindv)?;
+        let (word1, bindv1) = eval(FrozenWordList::from_wordv(wordv_if, bound.clone())?, &bindv)?;
 
         match word1 {
             Word::BoolWord(b) => { // 評価結果がbool型だった場合

@@ -30,6 +30,28 @@ pub enum WordType {
 }
 
 impl Word {
+    pub fn from_token(token: Token) -> Word {
+        match token {
+            Token::KeywordToken(s) => {
+                if let Some(op) = preset_operators().get(s) {
+                    return Word::OperatorWord(op.clone());
+                }
+
+                return Word::KeywordWord(s);
+            },
+            Token::SymbolToken(s) => {
+                if let Some(op) = preset_operators().get(s) {
+                    return Word::OperatorWord(op.clone());
+                }
+
+                return Word::SymbolWord(s);
+            },
+            Token::IdentifierToken(s) => {
+                return Word::IdentifierWord(s);
+            }
+        }
+    }
+
     pub fn get_type(&self) -> WordType {
         match self {
             Word::SetWord(_) => WordType::SetWord,
@@ -62,52 +84,6 @@ impl Word {
         match self {
             Word::OperatorWord(op) => Ok(op.clone()),
             _ => Err(mes.clone()),
-        }
-    }
-
-    pub fn split_by_word(string: &String) -> Option<(String, Word, String)> {
-        // Symbolから順番にwordを探してsplitしていく
-        for symbol in SYMBOL_LIST {
-            if let Some(n) = string.find(symbol) {
-                let s1 = &string[0..n];
-                let s2 = &string[n + symbol.len()..];
-                let word = Word::SymbolWord(symbol);
-                return Some((s1.to_string(), word, s2.to_string()));
-            }
-        }
-
-        for kw in KEYWORD_LIST {
-            if let Some(n) = string.find(kw) {
-                let s1 = &string[0..n];
-                let s2 = &string[n + kw.len()..];
-                let word = Word::KeywordWord(kw);
-                return Some((s1.to_string(), word, s2.to_string()));
-            }
-        }
-
-        // SymbolWordもKeywordWordも見つからなければIdentifierWordと見做す
-        return Some(("".to_string(), Word::IdentifierWord(string.clone()), "".to_string()));
-    }
-
-    // to remove
-    pub fn wordize(string: &String) -> Result<Vec<Word>, String> {
-        if string.is_empty() {
-            return Ok(Vec::new());
-        }
-
-        match Self::split_by_word(string) {
-            None => return Err("Parse error: Failed to wordize.".to_string()),
-            Some((s1, word, s2)) => {
-                let mut wv1 = Self::wordize(&s1)?;
-                let mut wv2 = Self::wordize(&s2)?;
-
-                if word != Word::SymbolWord(" ") { // スペースはpushしない
-                    wv1.push(word);
-                }
-                
-                wv1.append(&mut wv2);
-                return Ok(wv1);
-            }
         }
     }
 
@@ -238,7 +214,7 @@ impl FrozenWordList {
         return Ok(i_bound);
     }
 
-    pub fn from_wordv(wv: Vec<Word>, bound: &Option<(String, String)>) -> Result<Self, String> {
+    pub fn from_wordv(wv: Vec<Word>, bound: Option<(String, String)>) -> Result<Self, String> {
         let mut contents = wv;
 
         while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
@@ -248,7 +224,7 @@ impl FrozenWordList {
             let (wv_other, mut wv3) = split_drop(&contents, ie, ie);
             let (mut wv1, wv2) = split_drop(&wv_other, ib, ib);
 
-            let word = Word::FrozenWord(Self::from_wordv(wv2, &Some((b, e)))?);
+            let word = Word::FrozenWord(Self::from_wordv(wv2, Some((b, e)))?);
             wv1.push(word);
             wv1.append(&mut wv3);
             contents = wv1;
@@ -260,8 +236,19 @@ impl FrozenWordList {
         })
     }
 
+    pub fn from_tokenv(tv: Vec<Token>, bound: Option<(String, String)>) -> Result<Self, String> {
+        let mut wv = Vec::new();
+
+        for t in tv {
+            let w = Word::from_token(t);
+            wv.push(w);
+        }
+
+        return Self::from_wordv(wv, bound);
+    }
+
     pub fn from_string(string: &String) -> Result<Self, String> {
-        return Self::from_wordv(Word::wordize(string)?, &None);
+        return Self::from_tokenv(Token::tokenize(string)?, None);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -338,7 +325,7 @@ impl UnaryOp {
 }
 
 // presetの演算子はここに追加していく
-pub fn preset_operators<'a>() -> std::collections::HashMap<String, Operator> {
+pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
     let opv = vec![
         Operator::UnaryOp(UnaryOp {
             name: "!".to_string(),
@@ -457,7 +444,7 @@ impl Function {
     }
 }
 
-
+#[derive(Clone, PartialEq)]
 pub enum Token {
     SymbolToken(&'static str),
     KeywordToken(&'static str),
@@ -465,14 +452,14 @@ pub enum Token {
 }
 
 impl Token {
-    pub fn split_by_token(string: &String) -> Option<(String, Word, String)> {
-        // Symbolから順番にwordを探してsplitしていく
+    pub fn split_by_token(string: &String) -> Option<(String, Token, String)> {
+        // Symbolから順番にtokenを探してsplitしていく
         for symbol in SYMBOL_LIST {
             if let Some(n) = string.find(symbol) {
                 let s1 = &string[0..n];
                 let s2 = &string[n + symbol.len()..];
-                let word = Word::SymbolWord(symbol);
-                return Some((s1.to_string(), word, s2.to_string()));
+                let token = Token::SymbolToken(symbol);
+                return Some((s1.to_string(), token, s2.to_string()));
             }
         }
 
@@ -480,28 +467,28 @@ impl Token {
             if let Some(n) = string.find(kw) {
                 let s1 = &string[0..n];
                 let s2 = &string[n + kw.len()..];
-                let word = Word::KeywordWord(kw);
-                return Some((s1.to_string(), word, s2.to_string()));
+                let token = Token::KeywordToken(kw);
+                return Some((s1.to_string(), token, s2.to_string()));
             }
         }
 
-        // SymbolWordもKeywordWordも見つからなければIdentifierWordと見做す
-        return Some(("".to_string(), Word::IdentifierWord(string.clone()), "".to_string()));
+        // SymbolTokenもKeywordTokenも見つからなければIdentifierTokenと見做す
+        return Some(("".to_string(), Token::IdentifierToken(string.clone()), "".to_string()));
     }
 
-    pub fn tokenize(string: &String) -> Result<Vec<Word>, String> {
+    pub fn tokenize(string: &String) -> Result<Vec<Token>, String> {
         if string.is_empty() {
             return Ok(Vec::new());
         }
 
         match Self::split_by_token(string) {
-            None => return Err("Parse error: Failed to wordize.".to_string()),
-            Some((s1, word, s2)) => {
+            None => return Err("Parse error: Failed to tokenize.".to_string()),
+            Some((s1, token, s2)) => {
                 let mut wv1 = Self::tokenize(&s1)?;
                 let mut wv2 = Self::tokenize(&s2)?;
 
-                if word != Word::SymbolWord(" ") { // スペースはpushしない
-                    wv1.push(word);
+                if token != Token::SymbolToken(" ") { // スペースはpushしない
+                    wv1.push(token);
                 }
                 
                 wv1.append(&mut wv2);
