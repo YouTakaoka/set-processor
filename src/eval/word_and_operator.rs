@@ -341,8 +341,21 @@ impl FrozenWordList {
 //------------------------------------------------
 
 #[derive(Clone)]
+pub struct BinarySig {
+    args: (WordType, WordType),
+    ret: WordType,
+}
+
+impl BinarySig {
+    pub fn new(args: (WordType, WordType), ret: WordType) -> Self {
+        return Self {args: args, ret: ret};
+    }
+}
+
+#[derive(Clone)]
 pub struct BinaryOp {
     name: String,
+    sigs: Vec<BinarySig>,
     f: fn(Word, Word) -> Result<Word, String>,
     priority: usize,
 }
@@ -354,15 +367,49 @@ impl BinaryOp {
 }
 
 #[derive(Clone)]
+pub struct UnarySig {
+    pub arg: WordType,
+    pub ret: WordType,
+}
+
+impl UnarySig {
+    pub fn new(arg: WordType, ret: WordType) -> Self {
+        return Self {arg: arg, ret: ret};
+    }
+}
+
+#[derive(Clone)]
 pub struct UnaryOp {
     name: String,
-    f: fn(Word) -> Result<Word, String>,
+    fs: Vec<(UnarySig, fn(Word) -> Result<Word, String>)>,
     priority: usize,
 }
 
 impl UnaryOp {
-    pub fn apply(&self, t: Word) -> Result<Word, String> {
-        return (self.f)(t);
+    pub fn name(&self) -> String {
+        return self.name.clone();
+    }
+
+    pub fn apply(&self, w: Word) -> Result<Word, String> {
+        for (sig, f) in self.fs.clone() {
+            if sig.arg == w.get_type() {
+                return f(w);
+            }
+        }
+        return Err(format!("Unary operator '{}': Type error at the first argument. Expected one of {}, but got {}.",
+                    self.name(), self.accepts(), w.get_type()));
+    }
+
+    pub fn accepts(&self) -> String {
+        let mut string = String::new();
+        
+        for (sig, _) in self.fs.clone() {
+            string = format!("{},{}", string, sig.arg);
+        }
+        string.remove(0);
+        string = format!("[{}]", string);
+
+        return string;
     }
 }
 
@@ -371,14 +418,21 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
     let opv = vec![
         Operator::UnaryOp(UnaryOp {
             name: "!".to_string(),
+            fs: vec![
+                    (UnarySig::new(WordType::Bool, WordType::Bool),
+                    |t: Word| {
+                        let b = t.to_bool("")?;
+                        Ok(Word::Bool(!b))
+                    })
+                ],
             priority: 5,
-            f: |t: Word| {
-                let b = t.to_bool("Type Error in the first argument of unary operator.")?;
-                Ok(Word::Bool(!b))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+                BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+            ],
             priority: 4,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
@@ -388,6 +442,10 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "!=".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+                BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+            ],
             priority: 4,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
@@ -397,6 +455,9 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "in".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+            ],
             priority: 4,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
@@ -406,6 +467,9 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "-".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            ],
             priority: 4,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
@@ -415,6 +479,9 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "+".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            ],
             priority: 3,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
@@ -424,6 +491,9 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "*".to_string(),
+            sigs: vec![
+                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            ],
             priority: 2,
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
