@@ -8,95 +8,95 @@ pub use self::token::Token;
 
 #[derive(Clone, PartialEq)]
 pub enum Word {
-    SetWord(Set),
-    KeywordWord(&'static str),
-    SymbolWord(&'static str),
-    IdentifierWord(String),
-    BoolWord(bool),
-    NullWord,
-    FrozenWord(FrozenWordList),
-    OperatorWord(Operator),
-    FunctionWord(Function),
-    ExitSignalWord,
+    Set(Set),
+    Keyword(&'static str),
+    Symbol(&'static str),
+    Identifier(String),
+    Bool(bool),
+    Null,
+    Frozen(FrozenWordList),
+    Operator(Operator),
+    Function(Function),
+    ExitSignal,
 }
 
 #[derive(Clone, PartialEq)]
 pub enum WordType {
-    SetWord,
-    KeywordWord,
-    SymbolWord,
-    IdentifierWord,
-    BoolWord,
-    NullWord,
-    FrozenWord,
-    OperatorWord,
-    FunctionWord,
-    ExitSignalWord,
+    Set,
+    Keyword,
+    Symbol,
+    Identifier,
+    Bool,
+    Null,
+    Frozen,
+    Operator,
+    Function,
+    ExitSignal,
 }
 
 impl Word {
     pub fn from_token(token: Token) -> Word {
         match token {
-            Token::KeywordToken(s) => {
+            Token::Keyword(s) => {
                 if let Some(op) = preset_operators().get(s) {
-                    return Word::OperatorWord(op.clone());
+                    return Word::Operator(op.clone());
                 }
 
                 if let Some(f) = preset_functions().get(s) {
-                    return Word::FunctionWord(f.clone());
+                    return Word::Function(f.clone());
                 }
 
-                return Word::KeywordWord(s);
+                return Word::Keyword(s);
             },
-            Token::SymbolToken(s) => {
+            Token::Symbol(s) => {
                 if let Some(op) = preset_operators().get(s) {
-                    return Word::OperatorWord(op.clone());
+                    return Word::Operator(op.clone());
                 }
 
                 if let Some(f) = preset_functions().get(s) {
-                    return Word::FunctionWord(f.clone());
+                    return Word::Function(f.clone());
                 }
                 
-                return Word::SymbolWord(s);
+                return Word::Symbol(s);
             },
-            Token::IdentifierToken(s) => {
-                return Word::IdentifierWord(s);
+            Token::Identifier(s) => {
+                return Word::Identifier(s);
             }
         }
     }
 
     pub fn get_type(&self) -> WordType {
         match self {
-            Word::SetWord(_) => WordType::SetWord,
-            Word::KeywordWord(_) => WordType::KeywordWord,
-            Word::SymbolWord(_) => WordType::SymbolWord,
-            Word::IdentifierWord(_) => WordType::IdentifierWord,
-            Word::BoolWord(_) => WordType::BoolWord,
-            Word::NullWord => WordType::NullWord,
-            Word::FrozenWord(_) => WordType::FrozenWord,
-            Word::OperatorWord(_) => WordType::OperatorWord,
-            Word::FunctionWord(_) => WordType::FunctionWord,
-            Word::ExitSignalWord => WordType::ExitSignalWord,
+            Word::Set(_) => WordType::Set,
+            Word::Keyword(_) => WordType::Keyword,
+            Word::Symbol(_) => WordType::Symbol,
+            Word::Identifier(_) => WordType::Identifier,
+            Word::Bool(_) => WordType::Bool,
+            Word::Null => WordType::Null,
+            Word::Frozen(_) => WordType::Frozen,
+            Word::Operator(_) => WordType::Operator,
+            Word::Function(_) => WordType::Function,
+            Word::ExitSignal => WordType::ExitSignal,
         }
     }
    
     pub fn to_set(&self, mes: &str) -> Result<Set, String> {
         match self {
-            Word::SetWord(set) => Ok(set.clone()),
+            Word::Set(set) => Ok(set.clone()),
             _ => Err(mes.to_string()),
         }
     }
 
     pub fn to_bool(&self, mes: &str) -> Result<bool, String> {
         match self {
-            Word::BoolWord(b) => Ok(*b),
+            Word::Bool(b) => Ok(*b),
             _ => Err(mes.to_string()),
         }
     }
 
     pub fn to_operator(&self, mes: &str) -> Result<Operator, String> {
         match self {
-            Word::OperatorWord(op) => Ok(op.clone()),
+            Word::Operator(op) => Ok(op.clone()),
             _ => Err(mes.to_string()),
         }
     }
@@ -113,16 +113,16 @@ impl Word {
 
     pub fn to_string(self: &Self) -> String {
         match self {
-            Self::SetWord(set) => set.to_string(),
-            Self::SymbolWord(s) => s.to_string(),
-            Self::KeywordWord(s) => s.to_string(),
-            Self::IdentifierWord(s) => s.to_string(),
-            Self::BoolWord(b) => b.to_string(),
-            Self::NullWord => "".to_string(),
-            Self::FrozenWord(fwl) => fwl.to_string(),
-            Self::OperatorWord(op) => op.name(),
-            Self::FunctionWord(f) => f.to_string(),
-            Self::ExitSignalWord => "(ExitSignal)".to_string(),
+            Self::Set(set) => set.to_string(),
+            Self::Symbol(s) => s.to_string(),
+            Self::Keyword(s) => s.to_string(),
+            Self::Identifier(s) => s.to_string(),
+            Self::Bool(b) => b.to_string(),
+            Self::Null => "".to_string(),
+            Self::Frozen(fwl) => fwl.to_string(),
+            Self::Operator(op) => op.name(),
+            Self::Function(f) => f.to_string(),
+            Self::ExitSignal => "(ExitSignal)".to_string(),
         }
     }
 
@@ -214,7 +214,7 @@ impl FrozenWordList {
         let mut i_bound: Option<(usize, usize)> = None;
 
         for (b, e) in FROZEN_BOUND {
-            if let Some((ib, ie)) = Word::find_bracket(wv, Word::SymbolWord(b), Word::SymbolWord(e))? {
+            if let Some((ib, ie)) = Word::find_bracket(wv, Word::Symbol(b), Word::Symbol(e))? {
                 match i_bound {
                     None => i_bound = Some((ib, ie)),
                     Some((ib_old, _)) => {
@@ -239,7 +239,7 @@ impl FrozenWordList {
             let (wv_other, mut wv3) = split_drop(&contents, ie, ie);
             let (mut wv1, wv2) = split_drop(&wv_other, ib, ib);
 
-            let word = Word::FrozenWord(Self::from_wordv(wv2, Some((b, e)))?);
+            let word = Word::Frozen(Self::from_wordv(wv2, Some((b, e)))?);
             wv1.push(word);
             wv1.append(&mut wv3);
             contents = wv1;
@@ -351,7 +351,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             priority: 5,
             f: |t: Word| {
                 let b = t.to_bool("Type Error in the first argument of unary operator.")?;
-                Ok(Word::BoolWord(!b))
+                Ok(Word::Bool(!b))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -360,7 +360,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::BoolWord(s1 == s2))
+                Ok(Word::Bool(s1 == s2))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -369,7 +369,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::BoolWord(s1 != s2))
+                Ok(Word::Bool(s1 != s2))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -378,7 +378,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::BoolWord(s1.is_in(&s2)))
+                Ok(Word::Bool(s1.is_in(&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -387,7 +387,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::SetWord(Set::set_diff(&s1,&s2)))
+                Ok(Word::Set(Set::set_diff(&s1,&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -396,7 +396,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::SetWord(Set::set_union(&s1,&s2)))
+                Ok(Word::Set(Set::set_union(&s1,&s2)))
             },
         }),
         Operator::BinaryOp(BinaryOp {
@@ -405,7 +405,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             f: |t1: Word, t2: Word| {
                 let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
                 let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::SetWord(Set::set_intersec(&s1,&s2)))
+                Ok(Word::Set(Set::set_intersec(&s1,&s2)))
             },
         }),
     ];
@@ -482,17 +482,17 @@ pub fn preset_functions() -> std::collections::HashMap<String, Function> {
     let funcv = vec![
         Function {
             name: Some("is_empty".to_string()),
-            sig: Signature::new(vec![WordType::SetWord], WordType::BoolWord),
+            sig: Signature::new(vec![WordType::Set], WordType::Bool),
             f: |wv: Vec<Word>| {
                 let set = wv[0].to_set("Type error in the first argument: Set expected")?;
-                return Ok(Word::BoolWord(set.is_empty()));
+                return Ok(Word::Bool(set.is_empty()));
             }
         },
         Function {
             name: Some("exit".to_string()),
-            sig: Signature::new(vec![], WordType::ExitSignalWord),
+            sig: Signature::new(vec![], WordType::ExitSignal),
             f: |_: Vec<Word>| {
-                return Ok(Word::ExitSignalWord);
+                return Ok(Word::ExitSignal);
             }
         }
     ];

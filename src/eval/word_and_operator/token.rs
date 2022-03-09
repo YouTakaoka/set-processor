@@ -6,9 +6,9 @@ pub const SYMBOL_LIST: [&str; 15] = ["==", "!=", "&&", "||", "!", "=", " ", "{",
 
 #[derive(Clone, PartialEq)]
 pub enum Token {
-    SymbolToken(&'static str),
-    KeywordToken(&'static str),
-    IdentifierToken(String),
+    Symbol(&'static str),
+    Keyword(&'static str),
+    Identifier(String),
 }
 
 impl Token {
@@ -18,7 +18,7 @@ impl Token {
             if let Some(n) = string.find(symbol) {
                 let s1 = &string[0..n];
                 let s2 = &string[n + symbol.len()..];
-                let token = Token::SymbolToken(symbol);
+                let token = Token::Symbol(symbol);
                 return Some((s1.to_string(), token, s2.to_string()));
             }
         }
@@ -27,13 +27,13 @@ impl Token {
             if let Some(n) = string.find(kw) {
                 let s1 = &string[0..n];
                 let s2 = &string[n + kw.len()..];
-                let token = Token::KeywordToken(kw);
+                let token = Token::Keyword(kw);
                 return Some((s1.to_string(), token, s2.to_string()));
             }
         }
 
-        // SymbolTokenもKeywordTokenも見つからなければIdentifierTokenと見做す
-        return Some(("".to_string(), Token::IdentifierToken(string.clone()), "".to_string()));
+        // SymbolもKeywordも見つからなければIdentifierと見做す
+        return Some(("".to_string(), Token::Identifier(string.clone()), "".to_string()));
     }
 
     pub fn tokenize(string: &String) -> Result<Vec<Token>, String> {
@@ -47,7 +47,7 @@ impl Token {
                 let mut tv1 = Self::tokenize(&s1)?;
                 let mut tv2 = Self::tokenize(&s2)?;
 
-                if token != Token::SymbolToken(" ") { // スペースはpushしない
+                if token != Token::Symbol(" ") { // スペースはpushしない
                     tv1.push(token);
                 }
                 

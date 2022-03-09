@@ -17,7 +17,7 @@ fn main() -> std::io::Result<()> {
         
         match eval_string(&buffer, &bindv) {
             Ok((word, bindv_new)) => {
-                if let Word::ExitSignalWord = word {
+                if let Word::ExitSignal = word {
                     return Ok(());
                 }
 

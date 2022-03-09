@@ -9,7 +9,7 @@ pub struct Bind {
 }
 
 fn substitute(word: &Word, bindv: &Vec<Bind>) -> Result<Option<Word>, String> {
-    if let Word::IdentifierWord(identifier) = word {
+    if let Word::Identifier(identifier) = word {
         for bind in bindv {
             if bind.identifier == identifier.clone() {
                 return Ok(Some(bind.value.clone()));
@@ -32,12 +32,12 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
     let mut wv = fwl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
-    while let Some(i) = Word::find_word(&wv, Word::SymbolWord(",")) {
+    while let Some(i) = Word::find_word(&wv, Word::Symbol(",")) {
         let (wv1, wv2) = split_drop(&wv, i, i);
 
         let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
         match eval(fwl1, bindv)? {
-            (Word::SetWord(set), _) => contents.push(set),
+            (Word::Set(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
 
@@ -46,7 +46,7 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
 
     let fwl1 = FrozenWordList::from_wordv(wv, None)?;
     match eval(fwl1, bindv)? {
-        (Word::SetWord(set), _) => contents.push(set),
+        (Word::Set(set), _) => contents.push(set),
         _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
     }
 
@@ -60,7 +60,7 @@ fn set_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<Set, String
 
 fn find_frozen(wv: &Vec<Word>) -> Option<usize> {
     for i in 0..wv.len() {
-        if let Word::FrozenWord(_) = wv[i] {
+        if let Word::Frozen(_) = wv[i] {
             return Some(i);
         }
     }
@@ -82,7 +82,7 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
 
     let mut wv = Vec::new();
     let mut contents = fwl.get_contents();
-    while let Some(i) = Word::find_word(&contents, Word::SymbolWord(",")) {
+    while let Some(i) = Word::find_word(&contents, Word::Symbol(",")) {
         let (wv1, wv2) = split_drop(&contents, i, i);
         contents = wv2;
         let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
@@ -101,20 +101,20 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
 fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
     let bound = fwl.get_bound().clone();
     if fwl.is_empty() {
-        return Ok((Word::NullWord, bv.clone()));
+        return Ok((Word::Null, bv.clone()));
     }
 
     let mut bindv = bv.clone();
     
     // 先頭がletキーワードだった場合の処理
-    if let Some(Word::KeywordWord("let")) = fwl.get(0) {
+    if let Some(Word::Keyword("let")) = fwl.get(0) {
         if fwl.len() < 4 {
             return Err("Parse error: 'let' statement is too short.".to_string());
         }
 
-        if let Some(Word::SymbolWord("=")) = fwl.get(2) {
+        if let Some(Word::Symbol("=")) = fwl.get(2) {
             let word1 = fwl.get(1).unwrap();
-            if let Word::IdentifierWord(identifier) = &word1 {
+            if let Word::Identifier(identifier) = &word1 {
                 for bind in &bindv {
                     if bind.identifier == identifier.clone() {
                         return Err(format!("Word {} is already reserved as identifier.", identifier.clone()));
@@ -131,7 +131,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
                 return Ok((word, bindv_new));
             }
 
-            // word1がIdentifierWordでなかった場合
+            // word1がIdentifierでなかった場合
             return Err(format!("Cannot use '{}' as identifier.", word1.to_string()));
         }
 
@@ -140,14 +140,14 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     }
 
     // if文の処理
-    if let Some(Word::KeywordWord("if")) = fwl.get(0) {
+    if let Some(Word::Keyword("if")) = fwl.get(0) {
         // then節を探す(なければerror)
-        let option_then = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("then")),
+        let option_then = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::Keyword("if"), Word::Keyword("then")),
                                         "Keyword 'then' not found after 'if' keyword.".to_string())?;
         let (_, i_then) = option_then.unwrap();
 
         // else節を探す(なければerror)
-        let option_else = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::KeywordWord("if"), Word::KeywordWord("else")),
+        let option_else = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::Keyword("if"), Word::Keyword("else")),
                                         "Keyword 'else' not found after 'if' keyword.".to_string())?;
         let (_, i_else) = option_else.unwrap();
 
@@ -166,7 +166,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         let (word1, bindv1) = eval(FrozenWordList::from_wordv(wordv_if, bound.clone())?, &bindv)?;
 
         match word1 {
-            Word::BoolWord(b) => { // 評価結果がbool型だった場合
+            Word::Bool(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
                     let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindv1)?;
                     return Ok((w, bindv));
@@ -193,10 +193,10 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // 関数処理
     // 注: 括弧処理より前にやること！
     // 注: ループではなく再帰で処理すること！(オペレータや関数を返す関数があり得るため)
-    // 先に全部FunctionWordで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
+    // 先に全部Functionで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
     for i in 0..contents.len() {
-        if let Word::FunctionWord(f) = &contents[i] {
-            if let Some(Word::FrozenWord(fwl)) = contents.get(i+1) {
+        if let Word::Function(f) = &contents[i] {
+            if let Some(Word::Frozen(fwl)) = contents.get(i+1) {
                 if fwl.bound_is("(", ")") {
                     let word = apply_function(f.clone(), fwl.clone(), bv)?;
                     let contents_new = subst_range(&contents, i, i + 1, word);
@@ -210,14 +210,14 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // 括弧処理
     while let Some(i) = find_frozen(&contents) {
         match contents[i].clone() {
-            Word::FrozenWord(fwl1) => {
+            Word::Frozen(fwl1) => {
                 if fwl1.bound_is("(", ")") {
                     let (word, bindv1) = eval(fwl1, &bindv)?;
                     contents[i] = word;
                     bindv = bindv1;
                 } else if fwl1.bound_is("{", "}") { // Setの場合
                     let set = set_from_frozen(fwl1, &bindv)?;
-                    contents[i] = Word::SetWord(set);
+                    contents[i] = Word::Set(set);
                 }
             },
             word => panic!("eval: Function find_frozen() brought index of non-FrozenWord: {}", word.to_string()),
