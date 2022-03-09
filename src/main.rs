@@ -14,18 +14,18 @@ fn main() -> std::io::Result<()> {
         stdout().flush()?;
         stdin().read_line(&mut buffer).expect("Fail to read line.");
         buffer.pop();
-        if buffer == "exit" {
-            break;
-        }
         
         match eval_string(&buffer, &bindv) {
             Ok((word, bindv_new)) => {
+                if let Word::ExitSignalWord = word {
+                    return Ok(());
+                }
+
                 println!("{}", word.to_string());
                 bindv = bindv_new;
             },
             Err(e) => println!("{}", e),
         }
     }
-    Ok(())
 }
 

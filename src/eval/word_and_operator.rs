@@ -17,6 +17,7 @@ pub enum Word {
     FrozenWord(FrozenWordList),
     OperatorWord(Operator),
     FunctionWord(Function),
+    ExitSignalWord,
 }
 
 pub enum WordType {
@@ -29,6 +30,7 @@ pub enum WordType {
     FrozenWord,
     OperatorWord,
     FunctionWord,
+    ExitSignalWord,
 }
 
 impl Word {
@@ -73,6 +75,7 @@ impl Word {
             Word::FrozenWord(_) => WordType::FrozenWord,
             Word::OperatorWord(_) => WordType::OperatorWord,
             Word::FunctionWord(_) => WordType::FunctionWord,
+            Word::ExitSignalWord => WordType::ExitSignalWord,
         }
     }
    
@@ -118,6 +121,7 @@ impl Word {
             Self::FrozenWord(fwl) => fwl.to_string(),
             Self::OperatorWord(op) => op.name(),
             Self::FunctionWord(_) => "(Function)".to_string(),
+            Self::ExitSignalWord => "(ExitSignal)".to_string(),
         }
     }
 
@@ -464,6 +468,12 @@ pub fn preset_functions() -> std::collections::HashMap<&'static str, Function> {
                 return Ok(Word::BoolWord(set.is_empty()));
             }
         });
+
+    funcmap.insert("exit", Function {
+        f: |_: Vec<Word>| {
+            return Ok(Word::ExitSignalWord);
+        }
+    });
 
     return funcmap;
 }
