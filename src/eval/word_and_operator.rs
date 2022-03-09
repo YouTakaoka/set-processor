@@ -63,6 +63,12 @@ impl Word {
                     return Word::Function(f.clone());
                 }
 
+                for b in vec![true, false] {
+                    if s == b.to_string() {
+                        return Word::Bool(b);
+                    }
+                }
+
                 return Word::Keyword(s);
             },
             Token::Symbol(s) => {
