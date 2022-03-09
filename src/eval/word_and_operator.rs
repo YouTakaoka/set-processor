@@ -355,21 +355,43 @@ impl BinarySig {
 #[derive(Clone)]
 pub struct BinaryOp {
     name: String,
-    sigs: Vec<BinarySig>,
-    f: fn(Word, Word) -> Result<Word, String>,
+    fs: Vec<(BinarySig, fn(Word, Word) -> Result<Word, String>)>,
     priority: usize,
 }
 
 impl BinaryOp {
-    pub fn apply(&self, t1: Word, t2: Word) -> Result<Word, String> {
-        return (self.f)(t1, t2);
+    pub fn name(&self) -> String {
+        return self.name.clone();
+    }
+
+    pub fn accepts(&self) -> String {
+        let mut string = String::new();
+
+        for (sig, _) in self.fs.clone() {
+            let (t1, t2) = sig.args;
+            string = format!("{},({},{})", string, t1, t2);
+        }
+        string.remove(0);
+        string = format!("[{}]", string);
+
+        return string;
+    }
+
+    pub fn apply(&self, w1: Word, w2: Word) -> Result<Word, String> {
+        for (sig, f) in self.fs.clone() {
+            if (w1.get_type(), w2.get_type()) == sig.args {
+                return f(w1, w2);
+            }
+        }
+        return Err(format!("Bianry operator '{}': Type error. Expected one of pairs of types {}, got ({},{}).",
+                    self.name(), self.accepts(), w1.get_type(), w2.get_type()));
     }
 }
 
 #[derive(Clone)]
 pub struct UnarySig {
-    pub arg: WordType,
-    pub ret: WordType,
+    arg: WordType,
+    ret: WordType,
 }
 
 impl UnarySig {
@@ -420,8 +442,8 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             name: "!".to_string(),
             fs: vec![
                     (UnarySig::new(WordType::Bool, WordType::Bool),
-                    |t: Word| {
-                        let b = t.to_bool("")?;
+                    |w: Word| {
+                        let b = w.to_bool("")?;
                         Ok(Word::Bool(!b))
                     })
                 ],
@@ -429,77 +451,87 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
         }),
         Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
-                BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Bool(s1 == s2))
+                }),
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_bool("")?;
+                    let s2 = w2.to_bool("")?;
+                    Ok(Word::Bool(s1 == s2))
+                })
             ],
             priority: 4,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Bool(s1 == s2))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "!=".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
-                BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Bool(s1 != s2))
+                }),
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_bool("")?;
+                    let s2 = w2.to_bool("")?;
+                    Ok(Word::Bool(s1 != s2))
+                }),
             ],
             priority: 4,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Bool(s1 != s2))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "in".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Bool(s1.is_in(&s2)))
+                }),
             ],
             priority: 4,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Bool(s1.is_in(&s2)))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "-".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Set(Set::set_diff(&s1,&s2)))
+                }),
             ],
             priority: 4,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Set(Set::set_diff(&s1,&s2)))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "+".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Set(Set::set_union(&s1,&s2)))
+                }),
             ],
             priority: 3,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Set(Set::set_union(&s1,&s2)))
-            },
         }),
         Operator::BinaryOp(BinaryOp {
             name: "*".to_string(),
-            sigs: vec![
-                BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+            fs: vec![
+                (BinarySig::new((WordType::Set, WordType::Set), WordType::Set),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_set("")?;
+                    let s2 = w2.to_set("")?;
+                    Ok(Word::Set(Set::set_intersec(&s1,&s2)))
+                }),
             ],
             priority: 2,
-            f: |t1: Word, t2: Word| {
-                let s1 = t1.to_set("Type Error in the first argument of binary operator.")?;
-                let s2 = t2.to_set("Type Error in the second argument of binary operator.")?;
-                Ok(Word::Set(Set::set_intersec(&s1,&s2)))
-            },
         }),
     ];
 
