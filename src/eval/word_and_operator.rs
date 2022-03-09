@@ -34,6 +34,23 @@ pub enum WordType {
     ExitSignal,
 }
 
+impl std::fmt::Display for WordType {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        match self {
+            WordType::Set => write!(f, "Set"),
+            WordType::Keyword => write!(f, "Keyword"),
+            WordType::Symbol => write!(f, "Symbol"),
+            WordType::Identifier => write!(f, "Identifier"),
+            WordType::Bool => write!(f, "Bool"),
+            WordType::Null => write!(f, "Null"),
+            WordType::Frozen => write!(f, "Frozen"),
+            WordType::Operator => write!(f, "Operator"),
+            WordType::Function => write!(f, "Function"),
+            WordType::ExitSignal => write!(f, "ExitSignal"),
+        }
+    }
+}
+
 impl Word {
     pub fn from_token(token: Token) -> Word {
         match token {
@@ -461,6 +478,18 @@ pub struct Function {
 
 impl Function {
     pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
+        if wv.len() != self.sig.args.len() {
+            return Err(format!("Function {}: Number of argument(s) mismatch. Expected {} argument(s), got {}.",
+                        self.to_string(), self.sig.args.len(), wv.len()));
+        }
+
+        for i in 0..wv.len() {
+            if wv[i].get_type() != self.sig.args[i] {
+                return Err(format!("Function {}: Type mismatch at the {}-th argument. Expected {}, got {}.",
+                            self.to_string(), i+1, self.sig.args[i], wv[i].get_type()));
+            }
+        }
+
         return (self.f)(wv);
     }
 
@@ -484,7 +513,7 @@ pub fn preset_functions() -> std::collections::HashMap<String, Function> {
             name: Some("is_empty".to_string()),
             sig: Signature::new(vec![WordType::Set], WordType::Bool),
             f: |wv: Vec<Word>| {
-                let set = wv[0].to_set("Type error in the first argument: Set expected")?;
+                let set = wv[0].to_set("")?;
                 return Ok(Word::Bool(set.is_empty()));
             }
         },

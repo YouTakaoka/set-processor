@@ -94,6 +94,10 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
     let (word1, _) = eval(fwl1, bv)?;
     wv.push(word1);
 
+    if wv.len() == 1 && wv[0] == Word::Null {
+        wv = vec![];
+    }
+
     let word = f.apply(wv);
     return word;
 }
