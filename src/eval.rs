@@ -168,9 +168,11 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         match word1 {
             Word::BoolWord(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
-                    return eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindv1);
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindv1)?;
+                    return Ok((w, bindv));
                 } else { // 条件式==falseの場合
-                    return eval(FrozenWordList::from_wordv(wordv_else, bound)?, &bindv1);
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, bound)?, &bindv1)?;
+                    return Ok((w, bindv));
                 }
             },
             // boolじゃなかったらError
