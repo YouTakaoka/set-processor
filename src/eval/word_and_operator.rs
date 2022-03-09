@@ -20,6 +20,7 @@ pub enum Word {
     ExitSignalWord,
 }
 
+#[derive(Clone, PartialEq)]
 pub enum WordType {
     SetWord,
     KeywordWord,
@@ -120,7 +121,7 @@ impl Word {
             Self::NullWord => "".to_string(),
             Self::FrozenWord(fwl) => fwl.to_string(),
             Self::OperatorWord(op) => op.name(),
-            Self::FunctionWord(_) => "(Function)".to_string(),
+            Self::FunctionWord(f) => f.to_string(),
             Self::ExitSignalWord => "(ExitSignal)".to_string(),
         }
     }
@@ -312,6 +313,10 @@ impl FrozenWordList {
     }
 }
 
+//------------------------------------------------
+//            ここからOperator, Function
+//------------------------------------------------
+
 #[derive(Clone)]
 pub struct BinaryOp {
     name: String,
@@ -449,31 +454,62 @@ impl Operator {
 
 #[derive(Clone, PartialEq)]
 pub struct Function {
+    name: Option<String>,
     f: fn(Vec<Word>) -> Result<Word, String>,
+    sig: Signature, 
 }
 
 impl Function {
     pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
         return (self.f)(wv);
     }
+
+    pub fn name(&self) -> Option<String> {
+        return self.name.clone();
+    }
+
+    pub fn to_string(&self) -> String {
+        if let Some(name) = self.name() {
+            return name;
+        } else {
+            return "(anonymous function)".to_string();
+        }
+    }
 }
 
 // presetの関数はここに追加
-pub fn preset_functions() -> std::collections::HashMap<&'static str, Function> {
-    let mut funcmap = std::collections::HashMap::new();
-
-    funcmap.insert("is_empty", Function {
+pub fn preset_functions() -> std::collections::HashMap<String, Function> {
+    let funcv = vec![
+        Function {
+            name: Some("is_empty".to_string()),
+            sig: Signature::new(vec![WordType::SetWord], WordType::BoolWord),
             f: |wv: Vec<Word>| {
                 let set = wv[0].to_set("Type error in the first argument: Set expected")?;
                 return Ok(Word::BoolWord(set.is_empty()));
             }
-        });
-
-    funcmap.insert("exit", Function {
-        f: |_: Vec<Word>| {
-            return Ok(Word::ExitSignalWord);
+        },
+        Function {
+            name: Some("exit".to_string()),
+            sig: Signature::new(vec![], WordType::ExitSignalWord),
+            f: |_: Vec<Word>| {
+                return Ok(Word::ExitSignalWord);
+            }
         }
-    });
+    ];
 
-    return funcmap;
+    let funcnames: Vec<String> = funcv.iter().map(|x| x.name().unwrap()).collect();
+
+    return funcnames.into_iter().zip(funcv.into_iter()).collect();
+}
+
+#[derive(Clone, PartialEq)]
+struct Signature {
+    args: Vec<WordType>,
+    ret: WordType,
+}
+
+impl Signature {
+    pub fn new(args: Vec<WordType>, ret: WordType) -> Self {
+        return Self {args: args, ret: ret}
+    }
 }
