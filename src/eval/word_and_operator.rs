@@ -171,7 +171,7 @@ impl Word {
             if wv.len() != 1 {
                 return Err(s.to_string());
             }
-            ret.push(wv[0]);
+            ret.push(wv[0].clone());
         }
 
         return Ok(ret);

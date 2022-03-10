@@ -103,12 +103,24 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
 }
 
 fn funcgen(identifier: String, wv: &Vec<Word>) -> Result<Word, String> {
-    return Ok(Word::Null); //tofix
+    let (sig, xv, expr) = parse_funcdef(identifier, wv)?;
+    let f = |argv: Vec<Word>| -> Result<Word, String> {
+        let mut bv: Vec<Bind> = Vec::new();
+        for (x, arg) in xv.iter().zip(argv) {
+            bv.push(Bind {identifier: x.clone(), value: arg})
+        }
+
+        let fwl = FrozenWordList::from_wordv(expr, None)?;
+        let (ret, _) = eval(fwl, &bv)?;
+        return Ok(ret);
+    };
+    return Ok(Word::Function(Function {name: Some(identifier), f: f, sig: sig})); //tofix
 }
 
 fn parse_funcdef(identifier: String, wv: &Vec<Word>) -> Result<(Signature, Vec<String>, Vec<Word>), String> {
     if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
         if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
+            // 返り値のSignatureをつくる
             let mut argst = Vec::new();
             for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error.")? {
                 let t = w.to_type("Type error: Type name expected.")?;
@@ -122,7 +134,20 @@ fn parse_funcdef(identifier: String, wv: &Vec<Word>) -> Result<(Signature, Vec<S
             let sig = Signature::new(argst, rett);
 
             if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
-                return Ok(()); //tofix
+                // ここが中心部
+                let mut args = Vec::new();
+                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error.")? {
+                    if let Word::Identifier(id) = w {
+                        if id == identifier {
+                            return Err(format!("Name error: Function name '{}' cannot used in arguments.", identifier));
+                        }
+                        args.push(id);
+                    } else {
+                        return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
+                    }
+                }
+
+                return Ok((sig, args, wv_ret));
             } else {
                 return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
             }
