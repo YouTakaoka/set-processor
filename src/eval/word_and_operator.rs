@@ -51,6 +51,12 @@ impl std::fmt::Display for WordType {
     }
 }
 
+impl std::fmt::Display for Word {
+    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+        write!(f, "{}", self.to_string())
+    }
+}
+
 impl Word {
     pub fn from_token(token: Token) -> Word {
         match token {
@@ -134,6 +140,28 @@ impl Word {
         return i_ret;
     }
 
+    pub fn explode_by(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
+        let mut wv = wordv.clone();
+        let mut ret = Vec::new();
+
+        while let Some(i) = Self::find_word(&wv, self.clone()) {
+            let (wv1, wv2) = split_drop(&wv, i, i);
+            ret.push(wv1);
+            wv = wv2;
+        }
+        ret.push(wv);
+        
+        return ret;
+    }
+
+    pub fn split(&self, wv: &Vec<Word>) -> Option<(Vec<Word>, Vec<Word>)> {
+        if let Some(i) = Word::find_word(wv, self.clone()) {
+            let (wv1, wv2) = split_drop(wv, i, i);
+            return Some((wv1, wv2));
+        }
+        return None;
+    }
+
     pub fn to_string(self: &Self) -> String {
         match self {
             Self::Set(set) => set.to_string(),
@@ -187,7 +215,6 @@ impl Word {
         
         return Err("Bracket is not closed.".to_string());
     }
-
 }
 
 pub fn split_drop(wordv: &Vec<Word>, i1: usize, i2: usize) -> (Vec<Word>, Vec<Word>) {
