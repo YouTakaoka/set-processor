@@ -6,6 +6,8 @@ pub use self::constants::*;
 pub use self::setlike::*;
 pub use self::token::Token;
 
+pub const USER_TYPES: [WordType; 2] = [WordType::Bool, WordType::Set];
+
 #[derive(Clone, PartialEq)]
 pub enum Word {
     Set(Set),
@@ -75,6 +77,12 @@ impl Word {
                 for b in vec![true, false] {
                     if s == b.to_string() {
                         return Word::Bool(b);
+                    }
+                }
+
+                for t in USER_TYPES {
+                    if s == t.to_string() {
+                        return Word::Type(t);
                     }
                 }
 
