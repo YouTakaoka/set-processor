@@ -2,25 +2,20 @@ mod word_and_operator;
 
 pub use self::word_and_operator::*;
 
-#[derive(Clone)]
-pub struct Bind {
-    pub identifier: String,
-    pub value: Word,
-}
+type Bind = std::collections::HashMap<String, Word>;
 
-fn substitute(word: &Word, bindv: &Vec<Bind>) -> Result<Option<Word>, String> {
-    if let Word::Identifier(identifier) = word {
-        for bind in bindv {
-            if bind.identifier == identifier.clone() {
-                return Ok(Some(bind.value.clone()));
-            }
+fn substitute(word: &Word, bindm: Bind) -> Result<Option<Word>, String> {
+    if let Word::Identifier(id) = word {
+        if let Some(w) = bindm.get(id) {
+            return Ok(Some(w.clone()));
         }
-        return Err(format!("Parse error: Undefined word: {}", word.to_string()))
+        // Identifierにも関わらずbindmになければError
+        return Err(format!("Parse error: Undefined token: {}", word.to_string()))
     }
     return Ok(None);
 }
 
-fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList, String> {
+fn setlist_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<SetList, String> {
     if !fwl.bound_is("{", "}") {
         panic!("setlist_from_frozen: Irregal bound: {}", display_bound(fwl.get_bound()));
     }
@@ -36,7 +31,7 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
         let (wv1, wv2) = split_drop(&wv, i, i);
 
         let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
-        match eval(fwl1, bindv)? {
+        match eval(fwl1, bindm)? {
             (Word::Set(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
@@ -45,7 +40,7 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
     }
 
     let fwl1 = FrozenWordList::from_wordv(wv, None)?;
-    match eval(fwl1, bindv)? {
+    match eval(fwl1, bindm)? {
         (Word::Set(set), _) => contents.push(set),
         _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
     }
@@ -53,8 +48,8 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<SetList
     return Ok(SetList::new(contents));
 }
 
-fn set_from_frozen(fwl: FrozenWordList, bindv: &Vec<Bind>) -> Result<Set, String> {
-    let sl = setlist_from_frozen(fwl, bindv)?;
+fn set_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<Set, String> {
+    let sl = setlist_from_frozen(fwl, bindm)?;
     return Ok(sl.uniquify());
 }
 
@@ -75,7 +70,7 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Word, String> {
+fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, String> {
     if !fwl.bound_is("(", ")") {
         panic!("Word '(' must follow just after a function.");
     }
@@ -84,7 +79,7 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
     let contents = fwl.get_contents();
     for wv1 in Word::Symbol(",").explode(&contents) {
         let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
-        let (word1, _) = eval(fwl1, bv)?;
+        let (word1, _) = eval(fwl1, bm)?;
         wv.push(word1);
     }
 
@@ -103,17 +98,17 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
 }
 
 fn apply_user(f: UserFunction, argv: Vec<Word>) -> Result<Word, String> {
-    let mut bv: Vec<Bind> = Vec::new();
+    let mut bm: Bind = std::collections::HashMap::new();
     for (x, arg) in f.get_xv().iter().zip(argv) {
-        bv.push(Bind {identifier: x.clone(), value: arg})
+        bm.insert(x.clone(), arg);
     }
 
     if let Some(name) = f.get_name() {
-        bv.push(Bind {identifier: name, value: Word::Function(Function::User(f.clone()))})
+        bm.insert(name, Word::Function(Function::User(f.clone())));
     }
 
     let fwl = FrozenWordList::from_wordv(f.get_expr(), None)?;
-    let (ret, _) = eval(fwl, &bv)?;
+    let (ret, _) = eval(fwl, &bm)?;
     return Ok(ret);
 }
 
@@ -160,13 +155,13 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
     }
 }
 
-fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
+fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     let bound = fwl.get_bound().clone();
     if fwl.is_empty() {
-        return Ok((Word::Null, bv.clone()));
+        return Ok((Word::Null, bm.clone()));
     }
 
-    let mut bindv = bv.clone();
+    let mut bindm = bm.clone();
     
     // 先頭がletキーワードだった場合の処理
     if let Some(Word::Keyword("let")) = fwl.get(0) {
@@ -177,20 +172,14 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         if let Some(Word::Symbol("=")) = fwl.get(2) {
             let word1 = fwl.get(1).unwrap();
             if let Word::Identifier(identifier) = &word1 {
-                for bind in &bindv {
-                    if bind.identifier == identifier.clone() {
-                        return Err(format!("Name error: Token '{}' is already reserved as identifier.", identifier.clone()));
-                    }
+                if let Some(_) = bindm.get(identifier) {
+                    return Err(format!("Name error: Token '{}' is already reserved as identifier.", identifier.clone()));
                 }
                 
                 let mut wordv = fwl.get_contents();
-                let (word, _) = eval(FrozenWordList::from_wordv(wordv.split_off(3), bound)?, &bindv)?;
-                let mut bindv_new = bindv.clone();
-                bindv_new.push(Bind {
-                    identifier: identifier.clone(),
-                    value: word.clone(),
-                });
-                return Ok((word, bindv_new));
+                let (word, _) = eval(FrozenWordList::from_wordv(wordv.split_off(3), bound)?, &bindm)?;
+                bindm.insert(identifier.clone(), word.clone());
+                return Ok((word, bindm));
             }
 
             // word1がIdentifierでなかった場合
@@ -225,16 +214,16 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         wordv_if.remove(0);
         
         // if節を評価
-        let (word1, bindv1) = eval(FrozenWordList::from_wordv(wordv_if, bound.clone())?, &bindv)?;
+        let (word1, bindm1) = eval(FrozenWordList::from_wordv(wordv_if, bound.clone())?, &bindm)?;
 
         match word1 {
             Word::Bool(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindv1)?;
-                    return Ok((w, bindv));
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindm1)?;
+                    return Ok((w, bindm));
                 } else { // 条件式==falseの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, bound)?, &bindv1)?;
-                    return Ok((w, bindv));
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, bound)?, &bindm1)?;
+                    return Ok((w, bindm));
                 }
             },
             // boolじゃなかったらError
@@ -252,16 +241,14 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
 
         if let Some(Word::Identifier(identifier)) = fwl.get(1) {
             // ここが中心部
-            for bind in &bindv {
-                if bind.identifier == identifier.clone() {
-                    return Err(format!("Name error: Token '{}' is already reserved as identifier.", identifier.clone()));
-                }
+            if let Some(_) = bindm.get(&identifier) {
+                return Err(format!("Name error: Token '{}' is already reserved as identifier.", identifier.clone()));
             }
 
             let (_, wv1) = split_drop(&fwl.get_contents(), 2, 2);
             let f = funcgen(Some(identifier.clone()), &wv1)?;
-            bindv.push(Bind {identifier: identifier, value: f.clone()});
-            return Ok((f, bindv));
+            bindm.insert(identifier, f.clone());
+            return Ok((f, bindm));
         } else {
             let w = fwl.get(1).unwrap();
             return Err(format!("Name error: Token '{}' cannot used as identifier.", w));
@@ -273,7 +260,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     let mut contents: Vec<Word> = fwl.get_contents();
     for i in 0..contents.len() {
         let word = &contents[i];
-        if let Some(t_ret) = substitute(&word, &bindv)? {
+        if let Some(t_ret) = substitute(&word, bindm.clone())? {
             contents[i] = t_ret;
         }
     }
@@ -286,10 +273,10 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         if let Word::Function(f) = &contents[i] {
             if let Some(Word::Frozen(fwl)) = contents.get(i+1) {
                 if fwl.bound_is("(", ")") {
-                    let word = apply_function(f.clone(), fwl.clone(), &bindv)?;
+                    let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
                     let contents_new = subst_range(&contents, i, i + 1, word);
                     let fwl_new = FrozenWordList::from_wordv(contents_new, bound)?;
-                    return eval(fwl_new, &bindv);
+                    return eval(fwl_new, &bindm);
                 }
             }
         }
@@ -300,11 +287,11 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         match contents[i].clone() {
             Word::Frozen(fwl1) => {
                 if fwl1.bound_is("(", ")") {
-                    let (word, bindv1) = eval(fwl1, &bindv)?;
+                    let (word, bindm1) = eval(fwl1, &bindm)?;
                     contents[i] = word;
-                    bindv = bindv1;
+                    bindm = bindm1;
                 } else if fwl1.bound_is("{", "}") { // Setの場合
-                    let set = set_from_frozen(fwl1, &bindv)?;
+                    let set = set_from_frozen(fwl1, &bindm)?;
                     contents[i] = Word::Set(set);
                 }
             },
@@ -347,7 +334,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
                 let t_res = binop.apply(t1, t2)?;
                 wv1.push(t_res);
                 wv1.append(&mut wv2);
-                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindv);
+                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindm);
             },
             Operator::UnaryOp(unop) => {
                 if wv2.is_empty() {
@@ -357,19 +344,19 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
                 let t_res = unop.apply(t)?;
                 wv1.push(t_res);
                 wv1.append(&mut wv2);
-                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindv);
+                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindm);
             },
         }
     }
 
     // トークン列が長さ1ならそのまま返す
     if contents.len() == 1 {
-        return Ok((contents[0].clone(), bindv));
+        return Ok((contents[0].clone(), bindm));
     } else {
         return Err("Parse error.".to_string());
     }
 }
 
-pub fn eval_string(s: &String, bindv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String> {
-    return eval(FrozenWordList::from_string(s)?, bindv);
+pub fn eval_string(s: &String, bindm: &Bind) -> Result<(Word, Bind), String> {
+    return eval(FrozenWordList::from_string(s)?, bindm);
 }

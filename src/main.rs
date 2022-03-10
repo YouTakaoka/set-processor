@@ -6,7 +6,7 @@ pub use crate::eval::eval_string;
 use std::io::{stdin, stdout, Write};
 
 fn main() -> std::io::Result<()> {
-    let mut bindv = Vec::new();
+    let mut bindm = std::collections::HashMap::new();
 
     loop{
         let mut buffer = String::new();
@@ -15,14 +15,14 @@ fn main() -> std::io::Result<()> {
         stdin().read_line(&mut buffer).expect("Fail to read line.");
         buffer.pop();
         
-        match eval_string(&buffer, &bindv) {
-            Ok((word, bindv_new)) => {
+        match eval_string(&buffer, &bindm) {
+            Ok((word, bindm_new)) => {
                 if let Word::ExitSignal = word {
                     return Ok(());
                 }
 
                 println!("{}", word.to_string());
-                bindv = bindv_new;
+                bindm = bindm_new;
             },
             Err(e) => println!("{}", e),
         }
