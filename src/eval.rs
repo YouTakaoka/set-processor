@@ -108,6 +108,10 @@ fn apply_user(f: UserFunction, argv: Vec<Word>) -> Result<Word, String> {
         bv.push(Bind {identifier: x.clone(), value: arg})
     }
 
+    if let Some(name) = f.get_name() {
+        bv.push(Bind {identifier: name, value: Word::Function(Function::User(f.clone()))})
+    }
+
     let fwl = FrozenWordList::from_wordv(f.get_expr(), None)?;
     let (ret, _) = eval(fwl, &bv)?;
     return Ok(ret);
