@@ -387,7 +387,10 @@ impl FrozenWordList {
         for word in self.get_contents() {
             string = format!("{}, {}", string, word.to_string());
         }
-        string.remove(0);
+
+        if !string.is_empty() {
+            string.remove(0);
+        }
         string = format!("[{}]", string);
 
         return string;
@@ -428,6 +431,10 @@ impl BinaryOp {
         for (sig, _) in self.fs.clone() {
             let (t1, t2) = sig.args;
             string = format!("{},({},{})", string, t1, t2);
+        }
+
+        if string.is_empty() {
+            panic!("Variable 'string' is empty somehow.");
         }
         string.remove(0);
         string = format!("[{}]", string);
@@ -485,6 +492,10 @@ impl UnaryOp {
         
         for (sig, _) in self.fs.clone() {
             string = format!("{},{}", string, sig.arg);
+        }
+
+        if string.is_empty() {
+            panic!("Variable 'string' is empty somehow.");
         }
         string.remove(0);
         string = format!("[{}]", string);
