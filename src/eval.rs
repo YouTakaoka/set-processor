@@ -81,43 +81,35 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
     }
 
     let mut wv = Vec::new();
-    let mut contents = fwl.get_contents();
-    while let Some(i) = Word::find_word(&contents, Word::Symbol(",")) {
-        let (wv1, wv2) = split_drop(&contents, i, i);
-        contents = wv2;
+    let contents = fwl.get_contents();
+    for wv1 in Word::Symbol(",").explode(&contents) {
         let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
         let (word1, _) = eval(fwl1, bv)?;
         wv.push(word1);
     }
 
-    let fwl1 = FrozenWordList::from_wordv(contents, None)?;
-    let (word1, _) = eval(fwl1, bv)?;
-    wv.push(word1);
-
     if wv.len() == 1 && wv[0] == Word::Null {
         wv = vec![];
     }
 
-    let word = f.apply(wv);
-    return word;
+    match f {
+        Function::Preset(pf) => return pf.apply(wv),
+        Function::User(uf) => return apply_user(uf, wv),
+    }
 }
 
-fn funcgen(identifier: String, wv: &Vec<Word>) -> Result<Word, String> {
-    let (sig, xv, expr) = parse_funcdef(identifier, wv)?;
-    let f = |argv: Vec<Word>| -> Result<Word, String> {
-        let mut bv: Vec<Bind> = Vec::new();
-        for (x, arg) in xv.iter().zip(argv) {
-            bv.push(Bind {identifier: x.clone(), value: arg})
-        }
+fn apply_user(f: UserFunction, argv: Vec<Word>) -> Result<Word, String> {
+    let mut bv: Vec<Bind> = Vec::new();
+    for (x, arg) in f.get_xv().iter().zip(argv) {
+        bv.push(Bind {identifier: x.clone(), value: arg})
+    }
 
-        let fwl = FrozenWordList::from_wordv(expr, None)?;
-        let (ret, _) = eval(fwl, &bv)?;
-        return Ok(ret);
-    };
-    return Ok(Word::Function(Function {name: Some(identifier), f: f, sig: sig})); //tofix
+    let fwl = FrozenWordList::from_wordv(f.get_expr(), None)?;
+    let (ret, _) = eval(fwl, &bv)?;
+    return Ok(ret);
 }
 
-fn parse_funcdef(identifier: String, wv: &Vec<Word>) -> Result<(Signature, Vec<String>, Vec<Word>), String> {
+fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
     if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
         if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
             // 返り値のSignatureをつくる
@@ -138,16 +130,17 @@ fn parse_funcdef(identifier: String, wv: &Vec<Word>) -> Result<(Signature, Vec<S
                 let mut args = Vec::new();
                 for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error.")? {
                     if let Word::Identifier(id) = w {
-                        if id == identifier {
-                            return Err(format!("Name error: Function name '{}' cannot used in arguments.", identifier));
+                        if Some(id.clone()) == identifier {
+                            return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
+                                                identifier.unwrap()));
                         }
                         args.push(id);
                     } else {
                         return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
                     }
                 }
-
-                return Ok((sig, args, wv_ret));
+                let uf = UserFunction::new(identifier, sig, args, wv_ret);
+                return Ok(uf.to_word());
             } else {
                 return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
             }
@@ -257,7 +250,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
             }
 
             let (_, wv1) = split_drop(&fwl.get_contents(), 2, 2);
-            let f = funcgen(identifier.clone(), &wv1)?;
+            let f = funcgen(Some(identifier.clone()), &wv1)?;
             bindv.push(Bind {identifier: identifier, value: f.clone()});
             return Ok((f, bindv));
         } else {
@@ -279,7 +272,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
     // 関数処理
     // 注: 括弧処理より前にやること！
     // 注: ループではなく再帰で処理すること！(オペレータや関数を返す関数があり得るため)
-    // 先に全部Functionで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
+    // 先に全部PresetFunctionで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
     for i in 0..contents.len() {
         if let Word::Function(f) = &contents[i] {
             if let Some(Word::Frozen(fwl)) = contents.get(i+1) {
@@ -306,7 +299,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
                     contents[i] = Word::Set(set);
                 }
             },
-            word => panic!("eval: Function find_frozen() brought index of non-FrozenWord: {}", word.to_string()),
+            word => panic!("eval: PresetFunction find_frozen() brought index of non-FrozenWord: {}", word.to_string()),
         }
     }
 
