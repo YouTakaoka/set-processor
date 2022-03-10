@@ -18,6 +18,7 @@ pub enum Word {
     Operator(Operator),
     Function(Function),
     ExitSignal,
+    Type(WordType),
 }
 
 #[derive(Clone, PartialEq)]
@@ -32,6 +33,7 @@ pub enum WordType {
     Operator,
     Function,
     ExitSignal,
+    Type,
 }
 
 impl std::fmt::Display for WordType {
@@ -47,6 +49,7 @@ impl std::fmt::Display for WordType {
             WordType::Operator => write!(f, "Operator"),
             WordType::Function => write!(f, "Function"),
             WordType::ExitSignal => write!(f, "ExitSignal"),
+            WordType::Type => write!(f, "Type"),
         }
     }
 }
@@ -106,6 +109,7 @@ impl Word {
             Word::Operator(_) => WordType::Operator,
             Word::Function(_) => WordType::Function,
             Word::ExitSignal => WordType::ExitSignal,
+            Word::Type(_) => WordType::Type,
         }
     }
    
@@ -130,6 +134,13 @@ impl Word {
         }
     }
 
+    pub fn to_type(&self, mes: &str) -> Result<WordType, String> {
+        match self {
+            Word::Type(t) => Ok(t.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
     pub fn find_word(wordv: &Vec<Word>, word: Word) -> Option<usize> {
         let mut i_ret: Option<usize> = None;
         for i in 0..wordv.len() {
@@ -140,7 +151,7 @@ impl Word {
         return i_ret;
     }
 
-    pub fn explode_by(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
+    pub fn explode(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
         let mut wv = wordv.clone();
         let mut ret = Vec::new();
 
@@ -152,6 +163,18 @@ impl Word {
         ret.push(wv);
         
         return ret;
+    }
+
+    pub fn explode_each(&self, wordv: &Vec<Word>, s: &str) -> Result<Vec<Word>, String> {
+        let mut ret = Vec::new();
+        for wv in self.explode(wordv) {
+            if wv.len() != 1 {
+                return Err(s.to_string());
+            }
+            ret.push(wv[0]);
+        }
+
+        return Ok(ret);
     }
 
     pub fn split(&self, wv: &Vec<Word>) -> Option<(Vec<Word>, Vec<Word>)> {
@@ -174,6 +197,7 @@ impl Word {
             Self::Operator(op) => op.name(),
             Self::Function(f) => f.to_string(),
             Self::ExitSignal => "(ExitSignal)".to_string(),
+            Self::Type(t) => t.to_string(),
         }
     }
 
@@ -667,7 +691,7 @@ pub fn preset_functions() -> std::collections::HashMap<String, Function> {
 }
 
 #[derive(Clone, PartialEq)]
-struct Signature {
+pub struct Signature {
     args: Vec<WordType>,
     ret: WordType,
 }

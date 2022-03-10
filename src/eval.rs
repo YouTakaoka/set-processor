@@ -103,10 +103,26 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
 }
 
 fn funcgen(identifier: String, wv: &Vec<Word>) -> Result<Word, String> {
+    return Ok(Word::Null); //tofix
+}
+
+fn parse_funcdef(identifier: String, wv: &Vec<Word>) -> Result<(Signature, Vec<String>, Vec<Word>), String> {
     if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
         if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
+            let mut argst = Vec::new();
+            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error.")? {
+                let t = w.to_type("Type error: Type name expected.")?;
+                argst.push(t);
+            }
+
+            if wv_rett.len() != 1 {
+                return Err("Syntax error.".to_string());
+            }
+            let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
+            let sig = Signature::new(argst, rett);
+
             if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
-                return Ok(Word::Null); //tofix
+                return Ok(()); //tofix
             } else {
                 return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
             }
