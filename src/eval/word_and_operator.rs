@@ -6,7 +6,7 @@ pub use self::constants::*;
 pub use self::setlike::*;
 pub use self::token::Token;
 
-pub const USER_TYPES: [WordType; 2] = [WordType::Bool, WordType::Set];
+pub const USER_TYPES: [WordType; 3] = [WordType::Bool, WordType::Set, WordType::Number];
 
 #[derive(Clone, PartialEq)]
 pub enum Word {
@@ -21,6 +21,7 @@ pub enum Word {
     Function(Function),
     ExitSignal,
     Type(WordType),
+    Number(usize),
 }
 
 #[derive(Clone, PartialEq)]
@@ -36,6 +37,7 @@ pub enum WordType {
     Function,
     ExitSignal,
     Type,
+    Number,
 }
 
 impl std::fmt::Display for WordType {
@@ -52,6 +54,7 @@ impl std::fmt::Display for WordType {
             WordType::Function => write!(f, "Function"),
             WordType::ExitSignal => write!(f, "ExitSignal"),
             WordType::Type => write!(f, "Type"),
+            WordType::Number => write!(f, "Number"),
         }
     }
 }
@@ -101,6 +104,9 @@ impl Word {
             },
             Token::Identifier(s) => {
                 return Word::Identifier(s);
+            },
+            Token::Number(n) => {
+                return Word::Number(n);
             }
         }
     }
@@ -118,6 +124,7 @@ impl Word {
             Word::Function(_) => WordType::Function,
             Word::ExitSignal => WordType::ExitSignal,
             Word::Type(_) => WordType::Type,
+            Word::Number(_) => WordType::Number,
         }
     }
    
@@ -138,6 +145,13 @@ impl Word {
     pub fn to_operator(&self, mes: &str) -> Result<Operator, String> {
         match self {
             Word::Operator(op) => Ok(op.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    pub fn to_number(&self, mes: &str) -> Result<usize, String> {
+        match self {
+            Word::Number(n) => Ok(*n),
             _ => Err(mes.to_string()),
         }
     }
@@ -205,6 +219,7 @@ impl Word {
             Self::Function(f) => f.to_string(),
             Self::ExitSignal => "(ExitSignal)".to_string(),
             Self::Type(t) => t.to_string(),
+            Self::Number(n) => n.to_string(),
         }
     }
 
@@ -532,7 +547,13 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     let s1 = w1.to_bool("")?;
                     let s2 = w2.to_bool("")?;
                     Ok(Word::Bool(s1 == s2))
-                })
+                }),
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_number("")?;
+                    let s2 = w2.to_number("")?;
+                    Ok(Word::Bool(s1 == s2))
+                }),
             ],
             priority: 4,
         }),
@@ -549,6 +570,12 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                 |w1: Word, w2: Word| {
                     let s1 = w1.to_bool("")?;
                     let s2 = w2.to_bool("")?;
+                    Ok(Word::Bool(s1 != s2))
+                }),
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let s1 = w1.to_number("")?;
+                    let s2 = w2.to_number("")?;
                     Ok(Word::Bool(s1 != s2))
                 }),
             ],
@@ -575,6 +602,16 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     let s2 = w2.to_set("")?;
                     Ok(Word::Set(Set::set_diff(&s1,&s2)))
                 }),
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Number),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    if n1 >= n2 {
+                        Ok(Word::Number(n1 - n2))
+                    } else {
+                        Err(format!("Value error: The left hand side of binary operator '-' is '{}', which is less than the right hand side '{}'.", n1, n2))
+                    }
+                }),
             ],
             priority: 4,
         }),
@@ -586,6 +623,12 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     let s1 = w1.to_set("")?;
                     let s2 = w2.to_set("")?;
                     Ok(Word::Set(Set::set_union(&s1,&s2)))
+                }),
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Number),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Number(n1 + n2))
                 }),
             ],
             priority: 3,
@@ -599,8 +642,25 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     let s2 = w2.to_set("")?;
                     Ok(Word::Set(Set::set_intersec(&s1,&s2)))
                 }),
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Number),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Number(n1 * n2))
+                }),
             ],
             priority: 2,
+        }),
+        Operator::UnaryOp(UnaryOp {
+            name: "#".to_string(),
+            fs: vec![
+                    (UnarySig::new(WordType::Set, WordType::Number),
+                    |w: Word| {
+                        let set = w.to_set("")?;
+                        Ok(Word::Number(set.len()))
+                    })
+                ],
+            priority: 1,
         }),
     ];
 

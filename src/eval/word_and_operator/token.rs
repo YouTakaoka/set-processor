@@ -2,13 +2,14 @@
 pub const KEYWORD_LIST: [&str; 13] = ["let", "if", "then", "else", "true", "false", "def", "Set", "Bool","exit", "in", "size", "is_empty"];
 
 //2文字シンボルは必ず最初に入れること！
-pub const SYMBOL_LIST: [&str; 23] = ["==", "!=", "&&", "||", "->", "!", "=", " ", "{", "}", ",", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";"];
+pub const SYMBOL_LIST: [&str; 24] = ["==", "!=", "&&", "||", "->", "!", "=", " ", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";"];
 
 #[derive(Clone, PartialEq)]
 pub enum Token {
     Symbol(&'static str),
     Keyword(&'static str),
     Identifier(String),
+    Number(usize),
 }
 
 impl Token {
@@ -32,7 +33,12 @@ impl Token {
             }
         }
 
-        // SymbolもKeywordも見つからなければIdentifierと見做す
+        // SymbolもKeywordも見つからなければNumberかIdentifier
+        if let Ok(n) = string.parse::<usize>() { // parseできたらNumber
+            return Some(("".to_string(), Token::Number(n), "".to_string()));
+        }
+
+        // 何にも当てはまらなければ一旦Identifierと見做す
         return Some(("".to_string(), Token::Identifier(string.clone()), "".to_string()));
     }
 
