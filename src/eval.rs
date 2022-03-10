@@ -114,13 +114,13 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
         if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
             // 返り値のSignatureをつくる
             let mut argst = Vec::new();
-            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error.")? {
+            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error in the argument type part of function definition.")? {
                 let t = w.to_type("Type error: Type name expected.")?;
                 argst.push(t);
             }
 
             if wv_rett.len() != 1 {
-                return Err("Syntax error.".to_string());
+                return Err("Syntax error in the return type part of function definition.".to_string());
             }
             let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
             let sig = Signature::new(argst, rett);
@@ -128,7 +128,7 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
             if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
                 // ここが中心部
                 let mut args = Vec::new();
-                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error.")? {
+                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error in the arguments part of function definition.")? {
                     if let Word::Identifier(id) = w {
                         if Some(id.clone()) == identifier {
                             return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
@@ -243,6 +243,7 @@ fn eval(fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<(Word, Vec<Bind>), String
         }
 
         if let Some(Word::Identifier(identifier)) = fwl.get(1) {
+            // ここが中心部
             for bind in &bindv {
                 if bind.identifier == identifier.clone() {
                     return Err(format!("Name error: Token '{}' is already reserved as identifier.", identifier.clone()));

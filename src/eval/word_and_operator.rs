@@ -150,13 +150,12 @@ impl Word {
     }
 
     pub fn find_word(wordv: &Vec<Word>, word: Word) -> Option<usize> {
-        let mut i_ret: Option<usize> = None;
         for i in 0..wordv.len() {
             if wordv[i] == word {
-                i_ret = Some(i);
+                return Some(i);
             }
         }
-        return i_ret;
+        return None;
     }
 
     pub fn explode(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
