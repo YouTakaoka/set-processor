@@ -92,6 +92,10 @@ fn apply_function(f: Function, fwl: FrozenWordList, bv: &Vec<Bind>) -> Result<Wo
         wv = vec![];
     }
 
+    // Type check
+    f.type_check(wv.clone())?;
+
+    // Now apply function
     match f {
         Function::Preset(pf) => return pf.apply(wv),
         Function::User(uf) => return apply_user(uf, wv),

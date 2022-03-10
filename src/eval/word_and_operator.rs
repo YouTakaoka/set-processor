@@ -49,7 +49,7 @@ impl std::fmt::Display for WordType {
             WordType::Null => write!(f, "Null"),
             WordType::Frozen => write!(f, "Frozen"),
             WordType::Operator => write!(f, "Operator"),
-            WordType::Function => write!(f, "PresetFunction"),
+            WordType::Function => write!(f, "Function"),
             WordType::ExitSignal => write!(f, "ExitSignal"),
             WordType::Type => write!(f, "Type"),
         }
@@ -659,6 +659,29 @@ impl Function {
             Function::User(f) => f.to_string(),
         }
     }
+
+    pub fn sig(&self) -> Signature {
+        match self {
+            Function::Preset(f) => f.sig(),
+            Function::User(f) => f.get_sig(),
+        }
+    }
+
+    pub fn type_check(&self, wv: Vec<Word>) -> Result<(), String>{
+        if wv.len() != self.sig().args.len() {
+            return Err(format!("Function {}: Number of argument(s) mismatch. Expected {} argument(s), got {}.",
+                        self.to_string(), self.sig().args.len(), wv.len()));
+        }
+
+        for i in 0..wv.len() {
+            if wv[i].get_type() != self.sig().args[i] {
+                return Err(format!("Function {}: Type mismatch at the {}-th argument. Expected {}, got {}.",
+                            self.to_string(), i+1, self.sig().args[i], wv[i].get_type()));
+            }
+        }
+
+        return Ok(());
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -670,18 +693,6 @@ pub struct PresetFunction {
 
 impl PresetFunction {
     pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
-        if wv.len() != self.sig.args.len() {
-            return Err(format!("PresetFunction {}: Number of argument(s) mismatch. Expected {} argument(s), got {}.",
-                        self.to_string(), self.sig.args.len(), wv.len()));
-        }
-
-        for i in 0..wv.len() {
-            if wv[i].get_type() != self.sig.args[i] {
-                return Err(format!("PresetFunction {}: Type mismatch at the {}-th argument. Expected {}, got {}.",
-                            self.to_string(), i+1, self.sig.args[i], wv[i].get_type()));
-            }
-        }
-
         return (self.f)(wv);
     }
 
