@@ -6,7 +6,7 @@ pub use crate::eval::eval_string;
 use std::io::{stdin, stdout, Write};
 
 fn main() -> std::io::Result<()> {
-    let mut bindm = std::collections::HashMap::new();
+    let mut bindm = Bind::new();
 
     loop{
         let mut buffer = String::new();

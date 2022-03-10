@@ -2,7 +2,45 @@ mod word_and_operator;
 
 pub use self::word_and_operator::*;
 
-type Bind = std::collections::HashMap<String, Word>;
+#[derive(Clone)]
+pub struct Bind {
+    map: std::collections::HashMap<String, Word>,
+    funcmap: std::collections::HashMap<String, Word>,
+}
+
+impl Bind {
+    pub fn new() -> Self {
+        return Bind {
+            map: std::collections::HashMap::new(),
+            funcmap: std::collections::HashMap::new(),
+        }
+    }
+
+    pub fn get(&self, key: &String) -> Option<Word> {
+        if let Some(w) = self.map.get(key) {
+            return Some(w.clone());
+        } else if let Some(w) = self.funcmap.get(key) {
+            return Some(w.clone());
+        } else {
+            return None;
+        }
+    }
+
+    pub fn insert(self: &mut Self, key: String, val: Word) {
+        self.map.insert(key, val);
+    }
+
+    pub fn insert_func(self: &mut Self, key: String, val: Word) {
+        self.funcmap.insert(key, val);
+    }
+
+    pub fn func_only(&self) -> Self {
+        return Self {
+            map: std::collections::HashMap::new(),
+            funcmap: self.funcmap.clone(),
+        }
+    }
+}
 
 fn substitute(word: &Word, bindm: Bind) -> Result<Option<Word>, String> {
     if let Word::Identifier(id) = word {
@@ -93,18 +131,18 @@ fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, S
     // Now apply function
     match f {
         Function::Preset(pf) => return pf.apply(wv),
-        Function::User(uf) => return apply_user(uf, wv),
+        Function::User(uf) => return apply_user(uf, wv, bm),
     }
 }
 
-fn apply_user(f: UserFunction, argv: Vec<Word>) -> Result<Word, String> {
-    let mut bm: Bind = std::collections::HashMap::new();
+fn apply_user(f: UserFunction, argv: Vec<Word>, bindm: &Bind) -> Result<Word, String> {
+    let mut bm = bindm.func_only();
     for (x, arg) in f.get_xv().iter().zip(argv) {
         bm.insert(x.clone(), arg);
     }
 
     if let Some(name) = f.get_name() {
-        bm.insert(name, Word::Function(Function::User(f.clone())));
+        bm.insert_func(name, Word::Function(Function::User(f.clone())));
     }
 
     let fwl = FrozenWordList::from_wordv(f.get_expr(), None)?;
@@ -247,7 +285,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
 
             let (_, wv1) = split_drop(&fwl.get_contents(), 2, 2);
             let f = funcgen(Some(identifier.clone()), &wv1)?;
-            bindm.insert(identifier, f.clone());
+            bindm.insert_func(identifier, f.clone());
             return Ok((f, bindm));
         } else {
             let w = fwl.get(1).unwrap();
