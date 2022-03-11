@@ -534,6 +534,30 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             priority: 5,
         }),
         Operator::BinaryOp(BinaryOp {
+            name: "||".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let b1 = w1.to_bool("")?;
+                    let b2 = w2.to_bool("")?;
+                    Ok(Word::Bool(b1 || b2))
+                }),
+            ],
+            priority: 7,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "&&".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let b1 = w1.to_bool("")?;
+                    let b2 = w2.to_bool("")?;
+                    Ok(Word::Bool(b1 && b2))
+                }),
+            ],
+            priority: 6,
+        }),
+        Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
             fs: vec![
                 (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
