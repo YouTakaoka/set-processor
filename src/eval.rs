@@ -183,6 +183,33 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
     }
 }
 
+fn return_type_check(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(), String> {
+    return Ok(()); //tofix
+}
+
+fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, Bind), String> {
+    let mut wvv_def = Vec::new();
+    let mut wvv_other = Vec::new();
+    for wv in wvv {
+        if wv.get(0) == Some(&Word::Keyword("def")) {
+            wvv_def.push(wv.clone());
+        } else {
+            wvv_other.push(wv.clone());
+        }
+    }
+
+    return_type_check(&wvv_def, bindm)?;
+
+    let mut bm = bindm.clone();
+    for wv in wvv_def {
+        let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
+        let (_, bm1) = eval(fwl1, &bindm)?;
+        bm = bm1;
+    }
+
+    return Ok((wvv_other, bm));
+}
+
 fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     if fwl.is_empty() {
         return Ok((Word::Null, bm.clone()));
@@ -195,8 +222,11 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
         Env::Line => (),
         Env::Scope | Env::Bracket => {
             let wvv = Word::Symbol("|").explode(&fwl.get_contents());
+            let (wvv_other, bindm1) = compile_defs(&wvv, &bindm)?;
+            bindm = bindm1;
+
             let mut word = Word::Null;
-            for wv in wvv {
+            for wv in wvv_other {
                 let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
                 let (w1, bm1) = eval(fwl1, &bindm)?;
                 word = w1;
