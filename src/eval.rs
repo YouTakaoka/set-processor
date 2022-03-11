@@ -131,10 +131,6 @@ fn apply_user(f: UserFunction, argv: Vec<Word>, bindm: &Bind) -> Result<Word, St
         bm.insert(x.clone(), arg);
     }
 
-    if let Some(name) = f.get_name() {
-        bm.insert_func(name, Word::Function(Function::User(f.clone())));
-    }
-
     let fwl = FrozenWordList::from_wordv(f.get_expr(), Env::Line)?;
     let (ret, _) = eval(fwl, &bm)?;
     return Ok(ret);
