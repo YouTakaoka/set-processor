@@ -606,6 +606,54 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             priority: 4,
         }),
         Operator::BinaryOp(BinaryOp {
+            name: "<".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 < n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: ">".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 > n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "<=".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 <= n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: ">=".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 >= n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
             name: "in".to_string(),
             fs: vec![
                 (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
