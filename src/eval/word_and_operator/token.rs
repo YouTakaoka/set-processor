@@ -1,5 +1,5 @@
 
-pub const KEYWORD_LIST: [&str; 13] = ["let", "if", "then", "else", "true", "false", "def", "Set", "Bool","exit", "in", "size", "is_empty"];
+pub const KEYWORD_LIST: [&str; 14] = ["let", "if", "then", "else", "true", "false", "def", "Set", "Bool","exit", "in", "size", "is_empty", "print"];
 
 //2文字シンボルは必ず最初に入れること！
 pub const SYMBOL_LIST: [&str; 26] = ["==", "!=", "&&", "||", ">=", "<=", "->", "!", "=", " ", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";"];
@@ -25,11 +25,9 @@ impl Token {
         }
 
         for kw in KEYWORD_LIST {
-            if let Some(n) = string.find(kw) {
-                let s1 = &string[0..n];
-                let s2 = &string[n + kw.len()..];
+            if string == kw {
                 let token = Token::Keyword(kw);
-                return Some((s1.to_string(), token, s2.to_string()));
+                return Some(("".to_string(), token, "".to_string()));
             }
         }
 

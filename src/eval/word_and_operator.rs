@@ -22,6 +22,7 @@ pub enum Word {
     ExitSignal,
     Type(WordType),
     Number(usize),
+    PrintSignal(String),
 }
 
 #[derive(Clone, PartialEq)]
@@ -38,6 +39,7 @@ pub enum WordType {
     ExitSignal,
     Type,
     Number,
+    PrintSginal,
 }
 
 impl std::fmt::Display for WordType {
@@ -55,12 +57,13 @@ impl std::fmt::Display for WordType {
             WordType::ExitSignal => write!(f, "ExitSignal"),
             WordType::Type => write!(f, "Type"),
             WordType::Number => write!(f, "Number"),
+            WordType::PrintSginal => write!(f, "PrintSignal")
         }
     }
 }
 
 impl std::fmt::Display for Word {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+    fn fmt(self: &Self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
@@ -125,6 +128,7 @@ impl Word {
             Word::ExitSignal => WordType::ExitSignal,
             Word::Type(_) => WordType::Type,
             Word::Number(_) => WordType::Number,
+            Word::PrintSignal(_) => WordType::PrintSginal,
         }
     }
    
@@ -220,6 +224,7 @@ impl Word {
             Self::ExitSignal => "(ExitSignal)".to_string(),
             Self::Type(t) => t.to_string(),
             Self::Number(n) => n.to_string(),
+            Self::PrintSignal(s) => s.clone(),
         }
     }
 
@@ -730,9 +735,30 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     |w: Word| {
                         let set = w.to_set("")?;
                         Ok(Word::Number(set.len()))
-                    })
+                    }),
                 ],
             priority: 1,
+        }),
+        Operator::UnaryOp(UnaryOp {
+            name: "print".to_string(),
+            fs: vec![
+                    (UnarySig::new(WordType::Set, WordType::PrintSginal),
+                    |w: Word| {
+                        let s = w.to_string();
+                        Ok(Word::PrintSignal(s))
+                    }),
+                    (UnarySig::new(WordType::Number, WordType::PrintSginal),
+                    |w: Word| {
+                        let s = w.to_string();
+                        Ok(Word::PrintSignal(s))
+                    }),
+                    (UnarySig::new(WordType::Bool, WordType::PrintSginal),
+                    |w: Word| {
+                        let s = w.to_string();
+                        Ok(Word::PrintSignal(s))
+                    }),
+                ],
+            priority: 10,
         }),
     ];
 
@@ -862,7 +888,7 @@ pub fn preset_functions() -> std::collections::HashMap<String, PresetFunction> {
             f: |_: Vec<Word>| {
                 return Ok(Word::ExitSignal);
             }
-        }
+        },
     ];
 
     let funcnames: Vec<String> = funcv.iter().map(|x| x.name().unwrap()).collect();
