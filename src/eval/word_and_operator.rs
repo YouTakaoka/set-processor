@@ -534,6 +534,30 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
             priority: 5,
         }),
         Operator::BinaryOp(BinaryOp {
+            name: "||".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let b1 = w1.to_bool("")?;
+                    let b2 = w2.to_bool("")?;
+                    Ok(Word::Bool(b1 || b2))
+                }),
+            ],
+            priority: 7,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "&&".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Bool, WordType::Bool), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let b1 = w1.to_bool("")?;
+                    let b2 = w2.to_bool("")?;
+                    Ok(Word::Bool(b1 && b2))
+                }),
+            ],
+            priority: 6,
+        }),
+        Operator::BinaryOp(BinaryOp {
             name: "==".to_string(),
             fs: vec![
                 (BinarySig::new((WordType::Set, WordType::Set), WordType::Bool),
@@ -577,6 +601,54 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     let s1 = w1.to_number("")?;
                     let s2 = w2.to_number("")?;
                     Ok(Word::Bool(s1 != s2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "<".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 < n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: ">".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 > n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: "<=".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 <= n2))
+                }),
+            ],
+            priority: 4,
+        }),
+        Operator::BinaryOp(BinaryOp {
+            name: ">=".to_string(),
+            fs: vec![
+                (BinarySig::new((WordType::Number, WordType::Number), WordType::Bool),
+                |w1: Word, w2: Word| {
+                    let n1 = w1.to_number("")?;
+                    let n2 = w2.to_number("")?;
+                    Ok(Word::Bool(n1 >= n2))
                 }),
             ],
             priority: 4,
