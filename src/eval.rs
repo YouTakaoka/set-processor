@@ -54,33 +54,23 @@ fn substitute(word: &Word, bindm: Bind) -> Result<Option<Word>, String> {
 }
 
 fn setlist_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<SetList, String> {
-    if !fwl.bound_is("{", "}") {
-        panic!("setlist_from_frozen: Irregal bound: {}", display_bound(fwl.get_bound()));
+    if !fwl.env_is(Env::Set) {
+        panic!("setlist_from_frozen: Irregal env: {}", fwl.get_env());
     }
 
     if fwl.is_empty() {
         return Ok(SetList::new(Vec::new()))
     }
 
-    let mut wv = fwl.get_contents();
+    let wv = fwl.get_contents();
     let mut contents: Vec<Set> = Vec::new();
 
-    while let Some(i) = Word::find_word(&wv, Word::Symbol(",")) {
-        let (wv1, wv2) = split_drop(&wv, i, i);
-
-        let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
+    for wv1 in Word::Symbol(",").explode(&wv) {
+        let fwl1 = FrozenWordList::from_wordv(wv1, Env::Line)?;
         match eval(fwl1, bindm)? {
             (Word::Set(set), _) => contents.push(set),
             _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
         }
-
-        wv = wv2;
-    }
-
-    let fwl1 = FrozenWordList::from_wordv(wv, None)?;
-    match eval(fwl1, bindm)? {
-        (Word::Set(set), _) => contents.push(set),
-        _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
     }
 
     return Ok(SetList::new(contents));
@@ -109,14 +99,14 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
 }
 
 fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, String> {
-    if !fwl.bound_is("(", ")") {
-        panic!("Word '(' must follow just after a function.");
+    if !fwl.env_is(Env::Bracket) {
+        panic!("Token '(' must follow just after a function.");
     }
 
     let mut wv = Vec::new();
     let contents = fwl.get_contents();
     for wv1 in Word::Symbol(",").explode(&contents) {
-        let fwl1 = FrozenWordList::from_wordv(wv1, None)?;
+        let fwl1 = FrozenWordList::from_wordv(wv1, Env::Line)?;
         let (word1, _) = eval(fwl1, bm)?;
         wv.push(word1);
     }
@@ -145,7 +135,7 @@ fn apply_user(f: UserFunction, argv: Vec<Word>, bindm: &Bind) -> Result<Word, St
         bm.insert_func(name, Word::Function(Function::User(f.clone())));
     }
 
-    let fwl = FrozenWordList::from_wordv(f.get_expr(), None)?;
+    let fwl = FrozenWordList::from_wordv(f.get_expr(), Env::Line)?;
     let (ret, _) = eval(fwl, &bm)?;
     return Ok(ret);
 }
@@ -194,7 +184,7 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
 }
 
 fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
-    let bound = fwl.get_bound().clone();
+    let env = fwl.get_env().clone();
     if fwl.is_empty() {
         return Ok((Word::Null, bm.clone()));
     }
@@ -215,7 +205,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
                 }
                 
                 let mut wordv = fwl.get_contents();
-                let (word, _) = eval(FrozenWordList::from_wordv(wordv.split_off(3), bound)?, &bindm)?;
+                let (word, _) = eval(FrozenWordList::from_wordv(wordv.split_off(3), env)?, &bindm)?;
                 bindm.insert(identifier.clone(), word.clone());
                 return Ok((word, bindm));
             }
@@ -252,15 +242,15 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
         wordv_if.remove(0);
         
         // if節を評価
-        let (word1, bindm1) = eval(FrozenWordList::from_wordv(wordv_if, bound.clone())?, &bindm)?;
+        let (word1, bindm1) = eval(FrozenWordList::from_wordv(wordv_if, env.clone())?, &bindm)?;
 
         match word1 {
             Word::Bool(b) => { // 評価結果がbool型だった場合
                 if b { // 条件式==trueの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, bound)?, &bindm1)?;
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, env)?, &bindm1)?;
                     return Ok((w, bindm));
                 } else { // 条件式==falseの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, bound)?, &bindm1)?;
+                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, env)?, &bindm1)?;
                     return Ok((w, bindm));
                 }
             },
@@ -310,10 +300,10 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     for i in 0..contents.len() {
         if let Word::Function(f) = &contents[i] {
             if let Some(Word::Frozen(fwl)) = contents.get(i+1) {
-                if fwl.bound_is("(", ")") {
+                if fwl.env_is(Env::Bracket) {
                     let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
                     let contents_new = subst_range(&contents, i, i + 1, word);
-                    let fwl_new = FrozenWordList::from_wordv(contents_new, bound)?;
+                    let fwl_new = FrozenWordList::from_wordv(contents_new, env)?;
                     return eval(fwl_new, &bindm);
                 }
             }
@@ -324,13 +314,21 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     while let Some(i) = find_frozen(&contents) {
         match contents[i].clone() {
             Word::Frozen(fwl1) => {
-                if fwl1.bound_is("(", ")") {
-                    let (word, bindm1) = eval(fwl1, &bindm)?;
-                    contents[i] = word;
-                    bindm = bindm1;
-                } else if fwl1.bound_is("{", "}") { // Setの場合
-                    let set = set_from_frozen(fwl1, &bindm)?;
-                    contents[i] = Word::Set(set);
+                match fwl1.get_env() {
+                    Env::Scope => {
+                        let (word, _) = eval(fwl1, &bindm)?;
+                        contents[i] = word;
+                    },
+                    Env::Bracket => {
+                        let (word, bindm1) = eval(fwl1, &bindm)?;
+                        contents[i] = word;
+                        bindm = bindm1;
+                    },
+                    Env::Set => { // Setの場合
+                        let set = set_from_frozen(fwl1, &bindm)?;
+                        contents[i] = Word::Set(set);
+                    },
+                    _ => panic!("Env error. Env {} in {}.", fwl1.get_env(), fwl.get_env()),
                 }
             },
             word => panic!("eval: PresetFunction find_frozen() brought index of non-FrozenWord: {}", word.to_string()),
@@ -372,7 +370,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
                 let t_res = binop.apply(t1, t2)?;
                 wv1.push(t_res);
                 wv1.append(&mut wv2);
-                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindm);
+                return eval(FrozenWordList::from_wordv(wv1, env)?, &bindm);
             },
             Operator::UnaryOp(unop) => {
                 if wv2.is_empty() {
@@ -382,7 +380,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
                 let t_res = unop.apply(t)?;
                 wv1.push(t_res);
                 wv1.append(&mut wv2);
-                return eval(FrozenWordList::from_wordv(wv1, bound)?, &bindm);
+                return eval(FrozenWordList::from_wordv(wv1, env)?, &bindm);
             },
         }
     }

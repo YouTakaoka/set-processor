@@ -2,7 +2,7 @@
 pub const KEYWORD_LIST: [&str; 14] = ["let", "if", "then", "else", "true", "false", "def", "Set", "Bool","exit", "in", "size", "is_empty", "print"];
 
 //2文字シンボルは必ず最初に入れること！
-pub const SYMBOL_LIST: [&str; 26] = ["==", "!=", "&&", "||", ">=", "<=", "->", "!", "=", " ", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";"];
+pub const SYMBOL_LIST: [&str; 28] = ["==", "!=", "&&", "||", ">=", "<=", "->", "!", "=", " ", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";", "$", "%"];
 
 #[derive(Clone, PartialEq)]
 pub enum Token {

@@ -6,6 +6,8 @@ pub use self::constants::*;
 pub use self::setlike::*;
 pub use self::token::Token;
 
+use std::fmt;
+
 pub const USER_TYPES: [WordType; 3] = [WordType::Bool, WordType::Set, WordType::Number];
 
 #[derive(Clone, PartialEq)]
@@ -42,8 +44,8 @@ pub enum WordType {
     PrintSginal,
 }
 
-impl std::fmt::Display for WordType {
-    fn fmt(&self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for WordType {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             WordType::Set => write!(f, "Set"),
             WordType::Keyword => write!(f, "Keyword"),
@@ -62,8 +64,8 @@ impl std::fmt::Display for WordType {
     }
 }
 
-impl std::fmt::Display for Word {
-    fn fmt(self: &Self, f: &mut std::fmt::Formatter) -> std::fmt::Result {
+impl fmt::Display for Word {
+    fn fmt(self: &Self, f: &mut fmt::Formatter) -> fmt::Result {
         write!(f, "{}", self.to_string())
     }
 }
@@ -298,16 +300,43 @@ pub fn subst_range(wordv: &Vec<Word>, i1: usize, i2: usize, word: Word) -> Vec<W
 }
 
 #[derive(Clone, PartialEq)]
-pub struct FrozenWordList {
-    contents: Vec<Word>,
-    bound: Option<(String, String)>
+pub enum Env {
+    Line,
+    Main,
+    Set,
+    Bracket,
+    Scope,
 }
 
-pub fn display_bound(bound: &Option<(String, String)>) -> String {
-    match bound {
-        None => "None".to_string(),
-        Some((b,e)) => format!("({}, {})", b, e)
+impl Env {
+    pub fn from_bound(b: String, e: String) -> Result<Self, String> {
+        if b == "(" && e == ")" {
+            return Ok(Env::Bracket);
+        } else if b == "{" && e == "}" {
+            return Ok(Env::Set);
+        }
+
+        panic!("Frozen bound didn't match any of preset type.");
     }
+}
+
+impl fmt::Display for Env {
+    fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
+        let s = match self {
+            Env::Line => "Line",
+            Env::Main => "Main",
+            Env::Set => "Set",
+            Env::Bracket => "Bracket",
+            Env::Scope => "Scope",
+        };
+        return write!(f, "{}", s);
+    }
+}
+
+#[derive(Clone, PartialEq)]
+pub struct FrozenWordList {
+    contents: Vec<Word>,
+    env: Env,
 }
 
 impl FrozenWordList {
@@ -330,17 +359,26 @@ impl FrozenWordList {
         return Ok(i_bound);
     }
 
-    pub fn from_wordv(wv: Vec<Word>, bound: Option<(String, String)>) -> Result<Self, String> {
+    pub fn from_wordv(wv: Vec<Word>, env: Env) -> Result<Self, String> {
         let mut contents = wv;
 
         while let Some((ib, ie)) = Self::find_frozenbound(&contents)? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
+            let mut env = Env::from_bound(b, e)?;
+            if env == Env::Bracket && ib > 0 {
+                if let Some(Word::Symbol("$")) = contents.get(ib - 1) {
+                    env = Env::Scope;
+                }
+            }
 
             let (wv_other, mut wv3) = split_drop(&contents, ie, ie);
             let (mut wv1, wv2) = split_drop(&wv_other, ib, ib);
+            if env == Env::Scope {
+                wv1.pop();
+            }
 
-            let word = Word::Frozen(Self::from_wordv(wv2, Some((b, e)))?);
+            let word = Word::Frozen(Self::from_wordv(wv2, env)?);
             wv1.push(word);
             wv1.append(&mut wv3);
             contents = wv1;
@@ -348,11 +386,11 @@ impl FrozenWordList {
         
         return Ok(Self {
             contents: contents,
-            bound: bound.clone(),
+            env: env.clone(),
         })
     }
 
-    pub fn from_tokenv(tv: Vec<Token>, bound: Option<(String, String)>) -> Result<Self, String> {
+    pub fn from_tokenv(tv: Vec<Token>, env: Env) -> Result<Self, String> {
         let mut wv = Vec::new();
 
         for t in tv {
@@ -360,11 +398,11 @@ impl FrozenWordList {
             wv.push(w);
         }
 
-        return Self::from_wordv(wv, bound);
+        return Self::from_wordv(wv, env);
     }
 
     pub fn from_string(string: &String) -> Result<Self, String> {
-        return Self::from_tokenv(Token::tokenize(string)?, None);
+        return Self::from_tokenv(Token::tokenize(string)?, Env::Line);
     }
 
     pub fn is_empty(&self) -> bool {
@@ -383,22 +421,12 @@ impl FrozenWordList {
         return self.contents.clone();
     }
 
-    pub fn get_bound(&self) -> &Option<(String, String)> {
-        return &self.bound;
+    pub fn get_env(&self) -> Env {
+        return self.env.clone();
     }
 
-    pub fn bound_is_none(&self) -> bool {
-        match self.get_bound() {
-            None => return true,
-            _ => return false,
-        }
-    }
-
-    pub fn bound_is(&self, b: &str, e: &str) -> bool {
-        match self.get_bound() {
-            None => return false,
-            Some((b1, e1)) => return b1 == b && e1 == e,
-        }
+    pub fn env_is(&self, env: Env) -> bool {
+        return self.get_env() == env;
     }
 
     pub fn to_string(&self) -> String {
@@ -908,8 +936,8 @@ impl Signature {
     }
 }
 
-impl std::fmt::Display for Signature {
-    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+impl fmt::Display for Signature {
+    fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         write!(f, "{} -> {}", vec_to_string(self.args.clone()), self.ret)
     }
 }
