@@ -206,6 +206,20 @@ fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, B
     return Ok((wvv_other, bm));
 }
 
+fn eval_scope(wvv: &Vec<Vec<Word>>, bm: &Bind) -> Result<(Word, Bind), String> {
+    let (wvv_other, bindm1) = compile_defs(&wvv, bm)?;
+    let mut bindm = bindm1;
+
+    let mut word = Word::Null;
+    for wv in wvv_other {
+        let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
+        let (w1, bm1) = eval(fwl1, &bindm)?;
+        word = w1;
+        bindm = bm1;
+    }
+    return Ok((word, bindm));
+}
+
 fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     if fwl.is_empty() {
         return Ok((Word::Null, bm.clone()));
@@ -218,17 +232,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
         Env::Line => (),
         Env::Scope | Env::Bracket => {
             let wvv = Word::Symbol("|").explode(&fwl.get_contents());
-            let (wvv_other, bindm1) = compile_defs(&wvv, &bindm)?;
-            bindm = bindm1;
-
-            let mut word = Word::Null;
-            for wv in wvv_other {
-                let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
-                let (w1, bm1) = eval(fwl1, &bindm)?;
-                word = w1;
-                bindm = bm1;
-            }
-            return Ok((word, bindm));
+            return eval_scope(&wvv, &bindm);
         },
         _ => panic!("Invalid Env type {} in eval() function.", env),
     }
@@ -435,6 +439,27 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     }
 }
 
-pub fn eval_string(s: &String, bindm: &Bind) -> Result<(Word, Bind), String> {
+pub fn eval_line(s: &String, bindm: &Bind) -> Result<(Word, Bind), String> {
     return eval(FrozenWordList::from_string(s)?, bindm);
+}
+
+pub fn eval_main(string: &String) -> Result<Vec<Word>, String> {
+    let sv: Vec<String> = string.split('\n').map(|s| s.to_string()).collect();
+    let mut wvv: Vec<Vec<Word>> = Vec::new();
+    for s in sv {
+        let fwl = FrozenWordList::from_string(&s)?;
+        wvv.push(fwl.get_contents());
+    }
+
+    let (wvv_other, bindm) = compile_defs(&wvv, &Bind::new())?;
+    let mut bm = bindm.clone();
+    let mut wv_ret: Vec<Word> = Vec::new();
+    for wv in wvv_other {
+        let fwl = FrozenWordList::from_wordv(wv, Env::Line)?;
+        let (w1, bm1) = eval(fwl, &bm)?;
+        bm = bm1;
+        wv_ret.push(w1);
+    }
+
+    return Ok(wv_ret);
 }

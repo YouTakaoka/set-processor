@@ -2,7 +2,7 @@
 pub const KEYWORD_LIST: [&str; 14] = ["let", "if", "then", "else", "true", "false", "def", "Set", "Bool","exit", "in", "size", "is_empty", "print"];
 
 //2文字シンボルは必ず最初に入れること！
-pub const SYMBOL_LIST: [&str; 29] = ["==", "!=", "&&", "||", ">=", "<=", "->", "!", "=", " ", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";", "$", "%", "|"];
+pub const SYMBOL_LIST: [&str; 29] = ["==", "!=", "&&", "||", ">=", "<=", "->", " ", "!", "=", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";", "$", "%", "|"];
 
 #[derive(Clone, PartialEq)]
 pub enum Token {
@@ -40,7 +40,10 @@ impl Token {
         return Some(("".to_string(), Token::Identifier(string.clone()), "".to_string()));
     }
 
-    pub fn tokenize(string: &String) -> Result<Vec<Token>, String> {
+    pub fn tokenize(s: &String) -> Result<Vec<Token>, String> {
+        // コメントを削除
+        let string: &String = &s.split('%').map(|s| s.to_string()).collect::<Vec<String>>()[0];
+
         if string.is_empty() {
             return Ok(Vec::new());
         }
