@@ -184,12 +184,28 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
 }
 
 fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
-    let env = fwl.get_env().clone();
     if fwl.is_empty() {
         return Ok((Word::Null, bm.clone()));
     }
 
+    let env = fwl.get_env().clone();
     let mut bindm = bm.clone();
+
+    match env {
+        Env::Line => (),
+        Env::Scope | Env::Bracket => {
+            let wvv = Word::Symbol("|").explode(&fwl.get_contents());
+            let mut word = Word::Null;
+            for wv in wvv {
+                let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
+                let (w1, bm1) = eval(fwl1, &bindm)?;
+                word = w1;
+                bindm = bm1;
+            }
+            return Ok((word, bindm));
+        },
+        _ => panic!("Invalid Env type {} in eval() function.", env),
+    }
     
     // 先頭がletキーワードだった場合の処理
     if let Some(Word::Keyword("let")) = fwl.get(0) {
