@@ -43,7 +43,16 @@ print is_neumann({{}})
 print is_neumann({{{}}})
 
 let s = succ(succ({}))
-print s
-print is_neumann(s)
-print get_max(s)
-print next(s)
+%let s = succ(succ(succ({})))
+%print s
+%print is_neumann(s)
+%print get_max(s)
+%print next(s)
+
+def get_nth: Number -> Set; n -> if n == 0 then {} else next(get_nth(n - 1))
+print get_nth(0)
+print get_nth(1)
+print get_nth(2)
+print get_nth(3)
+print get_nth(4)
+print get_nth(5)

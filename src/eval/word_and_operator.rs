@@ -718,7 +718,7 @@ pub fn preset_operators() -> std::collections::HashMap<String, Operator> {
                     }
                 }),
             ],
-            priority: 4,
+            priority: 3,
         }),
         Operator::BinaryOp(BinaryOp {
             name: "+".to_string(),
