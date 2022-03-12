@@ -199,7 +199,7 @@ fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, B
     let mut bm = bindm.clone();
     for wv in wvv_def {
         let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
-        let (_, bm1) = eval(fwl1, &bindm)?;
+        let (_, bm1) = eval(fwl1, &bm)?;
         bm = bm1;
     }
 
