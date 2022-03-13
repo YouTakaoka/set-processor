@@ -25,20 +25,9 @@ fn script(filename: &String) -> std::io::Result<()> {
     f.read_to_string(&mut contents)
         .expect("something went wrong reading the file");
 
-    match eval_main(&contents) {
-        Ok(wv) => {
-            for w in wv {
-                match w {
-                    Word::PrintSignal(s) => println!("{}", s),
-                    Word::ExitSignal => return Ok(()),
-                    _ => (),
-                }
-            }
-        },
-        Err(e) => {
-            eprintln!("{}", e);
-            std::process::exit(1);
-        }
+    if let Err(e) = eval_main(&contents) {
+        eprintln!("{}", e);
+        std::process::exit(1);
     }
     
     return Ok(());

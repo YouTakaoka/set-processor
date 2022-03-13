@@ -443,7 +443,7 @@ pub fn eval_line(s: &String, bindm: &Bind) -> Result<(Word, Bind), String> {
     return eval(FrozenWordList::from_string(s)?, bindm);
 }
 
-pub fn eval_main(string: &String) -> Result<Vec<Word>, String> {
+pub fn eval_main(string: &String) -> Result<(), String> {
     let sv: Vec<String> = string.split('\n').map(|s| s.to_string()).collect();
     let mut wvv: Vec<Vec<Word>> = Vec::new();
     for s in sv {
@@ -458,8 +458,12 @@ pub fn eval_main(string: &String) -> Result<Vec<Word>, String> {
         let fwl = FrozenWordList::from_wordv(wv, Env::Line)?;
         let (w1, bm1) = eval(fwl, &bm)?;
         bm = bm1;
-        wv_ret.push(w1);
+        match w1 {
+            Word::PrintSignal(s) => println!("{}", s),
+            Word::ExitSignal => break,
+            _ => (),
+        }
     }
 
-    return Ok(wv_ret);
+    return Ok(());
 }
