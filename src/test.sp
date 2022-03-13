@@ -1,4 +1,5 @@
-%print({{{}}, {}})
+print {{{}}, {}}
+%hoge
 
 %let s = {}
 %print succ(succ(s)) % {{},{{}}}
@@ -12,7 +13,10 @@ def prev: Set -> Set; s -> g({}, s)
 def succ: Set -> Set; s -> s + {s}
 
 % ノイマン表示から{{...}}表示に変換する関数
-def from_n: Set -> Set; s -> if s == {} then {} else {from_n(prev(s))}
+def from_n: Set -> Set; s ->
+    if s == {}
+        then {}
+        else {from_n(prev(s))}
 %print from_n(succ(succ({}))) %{{{}}}
 
 % ノイマン集合かどうか判定する関数

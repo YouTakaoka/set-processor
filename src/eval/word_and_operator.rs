@@ -4,7 +4,7 @@ mod token;
 
 pub use self::constants::*;
 pub use self::setlike::*;
-pub use self::token::Token;
+pub use self::token::*;
 
 use std::fmt;
 

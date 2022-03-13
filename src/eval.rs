@@ -443,17 +443,64 @@ pub fn eval_line(s: &String, bindm: &Bind) -> Result<(Word, Bind), String> {
     return eval(FrozenWordList::from_string(s)?, bindm);
 }
 
+pub fn is_in<T: PartialEq>(x: T, vec: Vec<T>) -> bool {
+    for v in vec {
+        if v == x {
+            return true;
+        }
+    }
+    
+    return false;
+}
+
 pub fn eval_main(string: &String) -> Result<(), String> {
     let sv: Vec<String> = string.split('\n').map(|s| s.to_string()).collect();
+    if sv.len() == 0 {
+        return Ok(());
+    } else if sv.len() == 1 {
+        let (w, _) = eval_line(&sv[0], &Bind::new())?;
+        if let Word::PrintSignal(s) = w {
+            println!("{}", s);
+        }
+        return Ok(())
+    }
+
+    let mut tvv: Vec<Vec<Token>> = Vec::new();
+    let mut prev_tv: Vec<Token> = Token::tokenize(&sv[0])?;
+    let mut concat_prev = false;
+    for i in 1..sv.len() {
+        let mut tv = Token::tokenize(&sv[i])?;
+        if tv.len() == 0 {
+            continue;
+        }
+
+        // concat_prevがtrueもしくはLINE_BEGIN_TOKENSで始まる行なら
+        // 現在の行を前の行にくっつける
+        if concat_prev || is_in(tv[0].clone(), LINE_BEGIN_TOKENS.to_vec()) {
+            prev_tv.append(&mut tv);
+        } else {
+            // くっつけないなら前の行はそれで終わりなのでpushする
+            tvv.push(prev_tv);
+            prev_tv = tv.clone();
+        }
+
+        concat_prev = false;
+        if let Some(t) = tv.last() {
+            if is_in(t.clone(), LINE_END_TOKENS.to_vec()) {
+                // LINE_END_TOKENSで終わる行の場合
+                concat_prev = true;
+            }
+        }
+    }
+
     let mut wvv: Vec<Vec<Word>> = Vec::new();
-    for s in sv {
-        let fwl = FrozenWordList::from_string(&s)?;
+    for tv in tvv {
+        let fwl = FrozenWordList::from_tokenv(tv, Env::Line)?;
         wvv.push(fwl.get_contents());
     }
 
     let (wvv_other, bindm) = compile_defs(&wvv, &Bind::new())?;
     let mut bm = bindm.clone();
-    let mut wv_ret: Vec<Word> = Vec::new();
     for wv in wvv_other {
         let fwl = FrozenWordList::from_wordv(wv, Env::Line)?;
         let (w1, bm1) = eval(fwl, &bm)?;

@@ -4,6 +4,9 @@ pub const KEYWORD_LIST: [&str; 15] = ["let", "if", "then", "else", "true", "fals
 //2文字シンボルは必ず最初に入れること！
 pub const SYMBOL_LIST: [&str; 29] = ["==", "!=", "&&", "||", ">=", "<=", "->", " ", "!", "=", "{", "}", ",", "#", "+", "*", "-", "(", ")", "[", "]", "<", ">", "&", ":", ";", "$", "%", "|"];
 
+pub const LINE_END_TOKENS: [Token; 3] = [Token::Symbol("->"), Token::Symbol("("), Token::Symbol("|")];
+pub const LINE_BEGIN_TOKENS: [Token; 3] = [Token::Symbol(")"), Token::Keyword("then"), Token::Keyword("else"),];
+
 #[derive(Clone, PartialEq)]
 pub enum Token {
     Symbol(&'static str),
