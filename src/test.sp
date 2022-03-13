@@ -20,7 +20,10 @@ def from_n: Set -> Set; s ->
 %print from_n(succ(succ({}))) %{{{}}}
 
 % ノイマン集合かどうか判定する関数
-def is_neumann: Set -> Bool; s -> if is_empty(s) then true else (let m = get_max(s) | is_neumann(m) && succ(m) == s)
+def is_neumann: Set -> Bool; s -> if is_empty(s) then true else (
+            let m = get_max(s) |
+            is_neumann(m) && succ(m) == s
+        )
 
 % 集合を順番に並べたときの次の集合を得る関数
 % sがノイマン集合なら{{...}}表示に直して{}で囲う．

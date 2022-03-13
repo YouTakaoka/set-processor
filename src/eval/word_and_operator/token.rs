@@ -7,7 +7,7 @@ pub const SYMBOL_LIST: [&str; 29] = ["==", "!=", "&&", "||", ">=", "<=", "->", "
 pub const LINE_END_TOKENS: [Token; 3] = [Token::Symbol("->"), Token::Symbol("("), Token::Symbol("|")];
 pub const LINE_BEGIN_TOKENS: [Token; 3] = [Token::Symbol(")"), Token::Keyword("then"), Token::Keyword("else"),];
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Token {
     Symbol(&'static str),
     Keyword(&'static str),

@@ -469,7 +469,7 @@ pub fn eval_main(string: &String) -> Result<(), String> {
     let mut prev_tv: Vec<Token> = Token::tokenize(&sv[0])?;
     let mut concat_prev = false;
     for i in 1..sv.len() {
-        let mut tv = Token::tokenize(&sv[i])?;
+        let tv = Token::tokenize(&sv[i])?;
         if tv.len() == 0 {
             continue;
         }
@@ -477,7 +477,7 @@ pub fn eval_main(string: &String) -> Result<(), String> {
         // concat_prevがtrueもしくはLINE_BEGIN_TOKENSで始まる行なら
         // 現在の行を前の行にくっつける
         if concat_prev || is_in(tv[0].clone(), LINE_BEGIN_TOKENS.to_vec()) {
-            prev_tv.append(&mut tv);
+            prev_tv.append(&mut tv.clone());
         } else {
             // くっつけないなら前の行はそれで終わりなのでpushする
             tvv.push(prev_tv);
