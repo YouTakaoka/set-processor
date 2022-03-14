@@ -3,20 +3,37 @@ mod word_and_operator;
 pub use self::word_and_operator::*;
 
 #[derive(Clone)]
-pub struct Bind {
-    map: std::collections::HashMap<String, Word>,
-    funcmap: std::collections::HashMap<String, Word>,
+pub struct Bind<T: Clone> {
+    map: std::collections::HashMap<String, T>,
+    funcmap: std::collections::HashMap<String, T>,
 }
 
-impl Bind {
+impl Bind<Word> {
+    pub fn to_typebind(&self) -> Bind<WordType> {
+        let mut map_new = std::collections::HashMap::new();
+        let mut funcmap_new = std::collections::HashMap::new();
+
+        for (s, w) in self.map.clone() {
+            map_new.insert(s, w.get_type());
+        }
+
+        for (s, w) in self.funcmap.clone() {
+            funcmap_new.insert(s, w.get_type());
+        }
+
+        return Bind {map: map_new, funcmap: funcmap_new};
+    }
+}
+
+impl<T: Clone> Bind<T> {
     pub fn new() -> Self {
-        return Bind {
+        return Self {
             map: std::collections::HashMap::new(),
             funcmap: std::collections::HashMap::new(),
         }
     }
 
-    pub fn get(&self, key: &String) -> Option<Word> {
+    pub fn get(&self, key: &String) -> Option<T> {
         if let Some(w) = self.map.get(key) {
             return Some(w.clone());
         } else if let Some(w) = self.funcmap.get(key) {
@@ -26,11 +43,11 @@ impl Bind {
         }
     }
 
-    pub fn insert(self: &mut Self, key: String, val: Word) {
+    pub fn insert(self: &mut Self, key: String, val: T) {
         self.map.insert(key, val);
     }
 
-    pub fn insert_func(self: &mut Self, key: String, val: Word) {
+    pub fn insert_func(self: &mut Self, key: String, val: T) {
         self.funcmap.insert(key, val);
     }
 
@@ -42,7 +59,7 @@ impl Bind {
     }
 }
 
-fn substitute(word: &Word, bindm: Bind) -> Result<Option<Word>, String> {
+fn substitute<T: Clone>(word: &Word, bindm: Bind<T>) -> Result<Option<T>, String> {
     if let Word::Identifier(id) = word {
         if let Some(w) = bindm.get(id) {
             return Ok(Some(w.clone()));
@@ -53,7 +70,7 @@ fn substitute(word: &Word, bindm: Bind) -> Result<Option<Word>, String> {
     return Ok(None);
 }
 
-fn setlist_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<SetList, String> {
+fn setlist_from_frozen<T: Clone + WordKind + PartialEq>(fwl: FrozenWordList, bindm: &Bind<T>) -> Result<SetList, String> {
     if !fwl.env_is(Env::Set) {
         panic!("setlist_from_frozen: Irregal env: {}", fwl.get_env());
     }
@@ -67,16 +84,15 @@ fn setlist_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<SetList, Str
 
     for wv1 in Word::Symbol(",").explode(&wv) {
         let fwl1 = FrozenWordList::from_wordv(wv1, Env::Line)?;
-        match eval(fwl1, bindm)? {
-            (Word::Set(set), _) => contents.push(set),
-            _ => return Err("Type error: Non-set object found in {} symbol.".to_string()),
-        }
+        let (word, _) = eval(fwl1, bindm)?;
+        let set = word.to_set("Type error: Non-set object found in {} symbol.")?;
+        contents.push(set);
     }
 
     return Ok(SetList::new(contents));
 }
 
-fn set_from_frozen(fwl: FrozenWordList, bindm: &Bind) -> Result<Set, String> {
+fn set_from_frozen<T: Clone + WordKind + PartialEq>(fwl: FrozenWordList, bindm: &Bind<T>) -> Result<Set, String> {
     let sl = setlist_from_frozen(fwl, bindm)?;
     return Ok(sl.uniquify());
 }
@@ -98,7 +114,7 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, String> {
+fn apply_function<T: Clone + WordKind + PartialEq>(f: Function<T>, fwl: FrozenWordList, bm: &Bind<T>) -> Result<T, String> {
     if !fwl.env_is(Env::Bracket) {
         panic!("Token '(' must follow just after a function.");
     }
@@ -111,7 +127,7 @@ fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, S
         wv.push(word1);
     }
 
-    if wv.len() == 1 && wv[0] == Word::Null {
+    if fwl.is_empty() {
         wv = vec![];
     }
 
@@ -125,7 +141,7 @@ fn apply_function(f: Function, fwl: FrozenWordList, bm: &Bind) -> Result<Word, S
     }
 }
 
-fn apply_user(f: UserFunction, argv: Vec<Word>, bindm: &Bind) -> Result<Word, String> {
+fn apply_user<T: Clone + WordKind + PartialEq>(f: UserFunction<T>, argv: Vec<T>, bindm: &Bind<T>) -> Result<T, String> {
     let mut bm = bindm.func_only();
     for (x, arg) in f.get_xv().iter().zip(argv) {
         bm.insert(x.clone(), arg);
@@ -136,7 +152,7 @@ fn apply_user(f: UserFunction, argv: Vec<Word>, bindm: &Bind) -> Result<Word, St
     return Ok(ret);
 }
 
-fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
+fn funcgen<T: Clone + WordKind + PartialEq>(identifier: Option<String>, wv: &Vec<Word>) -> Result<T, String> {
     if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
         if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
             // 返り値のSignatureをつくる
@@ -166,8 +182,8 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
                         return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
                     }
                 }
-                let uf = UserFunction::new(identifier, sig, args, wv_ret);
-                return Ok(uf.to_word());
+                let uf = UserFunction::<T>::new(identifier, sig, args, wv_ret);
+                return Ok(uf.to_wordkind());
             } else {
                 return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
             }
@@ -179,11 +195,11 @@ fn funcgen(identifier: Option<String>, wv: &Vec<Word>) -> Result<Word, String> {
     }
 }
 
-fn return_type_check(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(), String> {
+fn return_type_check<T>(wvv: &Vec<Vec<Word>>, bindm: &Bind<T>) -> Result<(), String> {
     return Ok(()); //tofix
 }
 
-fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, Bind), String> {
+fn compile_defs<T: Clone + WordKind + PartialEq>(wvv: &Vec<Vec<Word>>, bindm: &Bind<T>) -> Result<(Vec<Vec<Word>>, Bind<T>), String> {
     let mut wvv_def = Vec::new();
     let mut wvv_other = Vec::new();
     for wv in wvv {
@@ -194,7 +210,9 @@ fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, B
         }
     }
 
-    return_type_check(&wvv_def, bindm)?;
+    if T::is_wordtype() {
+        return_type_check(&wvv_def, bindm)?;
+    }
 
     let mut bm = bindm.clone();
     for wv in wvv_def {
@@ -206,11 +224,11 @@ fn compile_defs(wvv: &Vec<Vec<Word>>, bindm: &Bind) -> Result<(Vec<Vec<Word>>, B
     return Ok((wvv_other, bm));
 }
 
-fn eval_scope(wvv: &Vec<Vec<Word>>, bm: &Bind) -> Result<(Word, Bind), String> {
+fn eval_scope<T: Clone + WordKind + PartialEq>(wvv: &Vec<Vec<Word>>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
     let (wvv_other, bindm1) = compile_defs(&wvv, bm)?;
     let mut bindm = bindm1;
 
-    let mut word = Word::Null;
+    let mut word = T::null();
     for wv in wvv_other {
         let fwl1 = FrozenWordList::from_wordv(wv.clone(), Env::Line)?;
         let (w1, bm1) = eval(fwl1, &bindm)?;
@@ -220,9 +238,9 @@ fn eval_scope(wvv: &Vec<Vec<Word>>, bm: &Bind) -> Result<(Word, Bind), String> {
     return Ok((word, bindm));
 }
 
-fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
+fn eval<T: Clone + WordKind + PartialEq>(fwl: FrozenWordList, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
     if fwl.is_empty() {
-        return Ok((Word::Null, bm.clone()));
+        return Ok((T::null(), bm.clone()));
     }
 
     let env = fwl.get_env().clone();
@@ -290,18 +308,23 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
         // if節を評価
         let (word1, bindm1) = eval(FrozenWordList::from_wordv(wordv_if, env.clone())?, &bindm)?;
 
-        match word1 {
-            Word::Bool(b) => { // 評価結果がbool型だった場合
-                if b { // 条件式==trueの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, env)?, &bindm1)?;
-                    return Ok((w, bindm));
-                } else { // 条件式==falseの場合
-                    let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, env)?, &bindm1)?;
-                    return Ok((w, bindm));
-                }
-            },
-            // boolじゃなかったらError
-            _ => return Err("Type error: Non-bool value returned by the 'if' expression.".to_string()),
+        let b = word1.to_bool("Type error: Non-bool value returned by the 'if' expression.")?;
+        if T::is_wordtype() {
+            let (wt_then, _) = eval(FrozenWordList::from_wordv(wordv_then, env)?, &bindm1)?;
+            let (wt_else, _) = eval(FrozenWordList::from_wordv(wordv_else, env)?, &bindm1)?;
+            if wt_then == wt_else {
+                return Ok((wt_then, bindm));
+            } else {
+                return Err(format!("Type error: Type mismatch of return type of 'then' clause ({}) and 'else' clause ({}).", wt_then, wt_else));
+            }
+        } else {
+            if b { // 条件式==trueの場合
+                let (w, _) = eval(FrozenWordList::from_wordv(wordv_then, env)?, &bindm1)?;
+                return Ok((w, bindm));
+            } else { // 条件式==falseの場合
+                let (w, _) = eval(FrozenWordList::from_wordv(wordv_else, env)?, &bindm1)?;
+                return Ok((w, bindm));
+            }
         }
     }
 
@@ -331,11 +354,12 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
 
     // Identifierトークンの置き換え処理
     // 注：関数処理より前にやること！
-    let mut contents: Vec<Word> = fwl.get_contents();
-    for i in 0..contents.len() {
-        let word = &contents[i];
-        if let Some(t_ret) = substitute(&word, bindm.clone())? {
-            contents[i] = t_ret;
+    let mut contents: Vec<T> = Vec::new();
+    for word in fwl.get_contents() {
+        if let Some(w_ret) = substitute(&word, bindm.clone())? {
+            contents.push(w_ret);
+        } else {
+            contents.push(T::from_word(word));
         }
     }
 
@@ -344,13 +368,15 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
     // 注: ループではなく再帰で処理すること！(オペレータや関数を返す関数があり得るため)
     // 先に全部PresetFunctionで置き換えてしまう(関数を引数にとる関数やオペレータがあり得るため)
     for i in 0..contents.len() {
-        if let Word::Function(f) = &contents[i] {
-            if let Some(Word::Frozen(fwl)) = contents.get(i+1) {
-                if fwl.env_is(Env::Bracket) {
-                    let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
-                    let contents_new = subst_range(&contents, i, i + 1, word);
-                    let fwl_new = FrozenWordList::from_wordv(contents_new, env)?;
-                    return eval(fwl_new, &bindm);
+        if let Ok(f) = contents[i].to_func("") {
+            if let Some(w) = contents.get(i+1) {  //imakoko WordKind::to_frozen()
+                if let Ok(fwl) = w.to_frozen("") {
+                    if fwl.env_is(Env::Bracket) {
+                        let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
+                        let contents_new = subst_range(&contents, i, i + 1, word);
+                        let fwl_new = FrozenWordList::from_wordv(contents_new, env)?;
+                        return eval(fwl_new, &bindm);
+                    }
                 }
             }
         }
@@ -408,7 +434,7 @@ fn eval(fwl: FrozenWordList, bm: &Bind) -> Result<(Word, Bind), String> {
 
         match contents[i].to_operator(&"Oops! Something is wrong.".to_string())? {
             Operator::BinaryOp(binop) => {
-                let t1:Word = wv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                let t1 :T = wv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
                 if wv2.is_empty() {
                     return Err("Parse error: Nothing after binary operator.".to_string());
                 }
