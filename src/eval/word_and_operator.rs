@@ -10,6 +10,19 @@ use std::fmt;
 
 pub const USER_TYPES: [WordType; 3] = [WordType::Bool, WordType::Set, WordType::Number];
 
+pub trait WordKind {
+    fn is_wordtype() -> bool;
+    fn get_type(&self) -> WordType;
+    fn null() -> Self;
+    fn to_set(&self, mes: &str) -> Result<Set, String>;
+    fn to_bool(&self, mes: &str) -> Result<bool, String>;
+    fn from_userf(uf: UserFunction<Self>) -> Self;
+    fn from_word(w: Word) -> Self;
+    fn to_func(&self, mes: &str) -> Result<Function<Self>, String>;
+    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList, String>;
+    fn to_operator(&self, mes: &str) -> Result<Operator, String>;
+}
+
 #[derive(Clone, PartialEq)]
 pub enum Word {
     Set(Set),
@@ -20,11 +33,61 @@ pub enum Word {
     Null,
     Frozen(FrozenWordList),
     Operator(Operator),
-    Function(Function),
+    Function(Function<Word>),
     ExitSignal,
     Type(WordType),
     Number(usize),
     PrintSignal(String),
+}
+
+impl WordKind for Word {
+    fn is_wordtype() -> bool {
+        return false;
+    }
+
+    fn get_type(&self) -> WordType {
+        match self {
+            Word::Set(_) => WordType::Set,
+            Word::Keyword(_) => WordType::Keyword,
+            Word::Symbol(_) => WordType::Symbol,
+            Word::Identifier(_) => WordType::Identifier,
+            Word::Bool(_) => WordType::Bool,
+            Word::Null => WordType::Null,
+            Word::Frozen(fwl) => WordType::Frozen(fwl.clone()),
+            Word::Operator(_) => WordType::Operator,
+            Word::Function(f) => WordType::Function(&f.to_wordtype()),
+            Word::ExitSignal => WordType::ExitSignal,
+            Word::Type(_) => WordType::Type,
+            Word::Number(_) => WordType::Number,
+            Word::PrintSignal(_) => WordType::PrintSginal,
+        }
+    }
+
+    fn null() -> Self {
+        return Word::Null;
+    }
+
+    fn to_set(&self, mes: &str) -> Result<Set, String> {
+        match self {
+            Word::Set(set) => Ok(set.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn from_userf(uf: UserFunction<Self>) -> Self {
+        return Word::Function(Function::User(uf));
+    }
+
+    fn from_word(w: Word) -> Self {
+        return w;
+    }
+
+    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList, String> {
+        match self {
+            Self::Frozen(fwl) => Ok(fwl.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -35,13 +98,58 @@ pub enum WordType {
     Identifier,
     Bool,
     Null,
-    Frozen,
+    Frozen(FrozenWordList),
     Operator,
-    Function,
+    Function(&'static Function<WordType>),
     ExitSignal,
     Type,
     Number,
     PrintSginal,
+}
+
+impl WordKind for WordType {
+    fn is_wordtype() -> bool {
+        return true;
+    }
+
+    fn get_type(&self) -> WordType {
+        return self.clone();
+    }
+
+    fn null() -> Self {
+        return Self::Null;
+    }
+
+    fn to_set(&self, mes: &str) -> Result<Set, String> {
+        if self.clone() == WordType::Set {
+            return Ok(Set::new(vec![]));
+        } else {
+            return Err(mes.to_string());
+        }
+    }
+
+    fn to_bool(&self, mes: &str) -> Result<bool, String> {
+        if self.clone() == WordType::Bool {
+            return Ok(true);
+        } else {
+            return Err(mes.to_string());
+        }
+    }
+
+    fn from_userf(uf: UserFunction<Self>) -> Self {
+        return WordType::Function(&Function::User(uf));
+    }
+
+    fn from_word(w: Word) -> Self {
+        return w.get_type();
+    }
+
+    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList, String> {
+        match self {
+            Self::Frozen(fwl) => Ok(fwl.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
 }
 
 impl fmt::Display for WordType {
@@ -53,9 +161,9 @@ impl fmt::Display for WordType {
             WordType::Identifier => write!(f, "Identifier"),
             WordType::Bool => write!(f, "Bool"),
             WordType::Null => write!(f, "Null"),
-            WordType::Frozen => write!(f, "Frozen"),
+            WordType::Frozen(_) => write!(f, "Frozen"),
             WordType::Operator => write!(f, "Operator"),
-            WordType::Function => write!(f, "Function"),
+            WordType::Function(_) => write!(f, "Function"),
             WordType::ExitSignal => write!(f, "ExitSignal"),
             WordType::Type => write!(f, "Type"),
             WordType::Number => write!(f, "Number"),
@@ -115,32 +223,7 @@ impl Word {
             }
         }
     }
-
-    pub fn get_type(&self) -> WordType {
-        match self {
-            Word::Set(_) => WordType::Set,
-            Word::Keyword(_) => WordType::Keyword,
-            Word::Symbol(_) => WordType::Symbol,
-            Word::Identifier(_) => WordType::Identifier,
-            Word::Bool(_) => WordType::Bool,
-            Word::Null => WordType::Null,
-            Word::Frozen(_) => WordType::Frozen,
-            Word::Operator(_) => WordType::Operator,
-            Word::Function(_) => WordType::Function,
-            Word::ExitSignal => WordType::ExitSignal,
-            Word::Type(_) => WordType::Type,
-            Word::Number(_) => WordType::Number,
-            Word::PrintSignal(_) => WordType::PrintSginal,
-        }
-    }
-   
-    pub fn to_set(&self, mes: &str) -> Result<Set, String> {
-        match self {
-            Word::Set(set) => Ok(set.clone()),
-            _ => Err(mes.to_string()),
-        }
-    }
-
+    
     pub fn to_bool(&self, mes: &str) -> Result<bool, String> {
         match self {
             Word::Bool(b) => Ok(*b),
@@ -270,7 +353,7 @@ impl Word {
     }
 }
 
-pub fn split_drop(wordv: &Vec<Word>, i1: usize, i2: usize) -> (Vec<Word>, Vec<Word>) {
+pub fn split_drop<T: Clone>(wordv: &Vec<T>, i1: usize, i2: usize) -> (Vec<T>, Vec<T>) {
     if i1 > i2 {
         panic!("i1 is greater than i2. i1={} while i2={}", i1, i2);
     }
@@ -291,7 +374,7 @@ pub fn split_drop(wordv: &Vec<Word>, i1: usize, i2: usize) -> (Vec<Word>, Vec<Wo
     return (wv1, wv2);
 }
 
-pub fn subst_range(wordv: &Vec<Word>, i1: usize, i2: usize, word: Word) -> Vec<Word> {
+pub fn subst_range<T: Clone>(wordv: &Vec<T>, i1: usize, i2: usize, word: T) -> Vec<T> {
     let (wv1, wv2) = split_drop(wordv, i1, i2);
     let mut wv = wv1.clone();
     wv.push(word);
@@ -833,12 +916,12 @@ impl Operator {
 }
 
 #[derive(Clone, PartialEq)]
-pub enum Function {
-    Preset(PresetFunction),
-    User(UserFunction),
+pub enum Function<T: Clone + PartialEq> {
+    Preset(PresetFunction<T>),
+    User(UserFunction<T>),
 }
 
-impl Function {
+impl<T: Clone + PartialEq> Function<T> {
     pub fn to_string(&self) -> String {
         match self {
             Function::Preset(f) => f.to_string(),
@@ -852,8 +935,10 @@ impl Function {
             Function::User(f) => f.get_sig(),
         }
     }
+}
 
-    pub fn type_check(&self, wv: Vec<Word>) -> Result<(), String>{
+impl<T: WordKind + Clone + PartialEq> Function<T> {
+    pub fn type_check(&self, wv: Vec<T>) -> Result<(), String>{
         if wv.len() != self.sig().args.len() {
             return Err(format!("Function {}: Number of argument(s) mismatch. Expected {} argument(s), got {}.",
                         self.to_string(), self.sig().args.len(), wv.len()));
@@ -870,18 +955,37 @@ impl Function {
     }
 }
 
+impl Function<Word> {
+    pub fn to_wordtype(&self) -> Function<WordType> {
+        match self {
+            Self::Preset(pf) => Function::Preset(pf.to_wordtype()),
+            Self::User(uf) => Function::User(uf.to_wordtype()),
+        }
+    }
+}
+
 #[derive(Clone, PartialEq)]
-pub struct PresetFunction {
+pub struct PresetFunction<T: Clone + PartialEq> {
     name: Option<String>,
-    f: fn(Vec<Word>) -> Result<Word, String>,
+    f: fn(Vec<T>) -> Result<T, String>,
     sig: Signature, 
 }
 
-impl PresetFunction {
-    pub fn apply(&self, wv: Vec<Word>) -> Result<Word, String> {
-        return (self.f)(wv);
-    }
+impl PresetFunction<Word> {
+    pub fn to_wordtype(&self) -> PresetFunction<WordType> {
+        let f = |wv: Vec<WordType>| {
+            return Ok(WordType::Null);
+        };
 
+        return PresetFunction::<WordType> {
+            name: self.name.clone(),
+            sig: self.sig.clone(),
+            f: f,
+        }
+    }
+}
+
+impl<T: Clone + PartialEq> PresetFunction<T> {
     pub fn name(&self) -> Option<String> {
         return self.name.clone();
     }
@@ -897,10 +1001,14 @@ impl PresetFunction {
         }
         return format!("{}: {}", name, self.sig());
     }
+
+    pub fn apply(&self, wv: Vec<T>) -> Result<T, String> {
+        return (self.f)(wv);
+    }
 }
 
 // presetの関数はここに追加
-pub fn preset_functions() -> std::collections::HashMap<String, PresetFunction> {
+pub fn preset_functions() -> std::collections::HashMap<String, PresetFunction<Word>> {
     let funcv = vec![
         PresetFunction {
             name: Some("is_empty".to_string()),
@@ -955,14 +1063,14 @@ pub fn vec_to_string<T: ToString>(vec: Vec<T>) -> String {
 }
 
 #[derive(Clone, PartialEq)]
-pub struct UserFunction {
+pub struct UserFunction<T: Clone + PartialEq> {
     name: Option<String>,
     sig: Signature,
     xv: Vec<String>,
     expr: Vec<Word>,
 }
 
-impl UserFunction {
+impl<T: Clone + PartialEq + WordKind> UserFunction<T> {
     pub fn new(name: Option<String>, sig: Signature, xv: Vec<String>, expr: Vec<Word>) -> Self {
         return Self {name: name, sig: sig, xv: xv, expr: expr};
     }
@@ -983,10 +1091,6 @@ impl UserFunction {
         return self.expr.clone();
     }
 
-    pub fn to_word(&self) -> Word {
-        return Word::Function(Function::User(self.clone()));
-    }
-
     pub fn to_string(&self) -> String {
         let mut name = "(anonymous function)".to_string();
         if let Some(n) = self.get_name() {
@@ -994,5 +1098,20 @@ impl UserFunction {
         }
 
         return format!("{}: {}", name, self.get_sig());
+    }
+
+    pub fn to_wordkind(&self) -> T {
+        return T::from_userf(self.clone());
+    }
+}
+    
+impl UserFunction<Word> {
+    pub fn to_wordtype(&self) -> UserFunction<WordType> {
+        return UserFunction::<WordType>::new(
+            self.name.clone(),
+            self.sig.clone(),
+            self.xv.clone(),
+            self.expr.clone()
+        )
     }
 }
