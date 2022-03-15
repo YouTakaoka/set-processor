@@ -160,7 +160,26 @@ fn apply_user<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: UserFunction
     return Ok(ret);
 }
 
-fn return_type_check<T: Clone>(fv_def: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(), String> {
+fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
+    (fv_def: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(), String> {
+
+    let mut bm = bindm.clone();
+    for frozen in fv_def {
+        let (_, bm1) = eval(frozen.clone(), &bm)?;
+        bm = bm1;
+    }
+
+    for frozen in fv_def {
+        if let Frozen::FuncDef(fd) = frozen {
+            let expr = fd.expr.clone();
+            let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm)?;
+            let wt = w.get_type();
+            if wt != fd.rett {
+                return Err(format!("Type error: Return type of function {:?} doesn't match the signature. Expected {}, got {}.",
+                            fd.name.clone(), fd.rett.clone(), wt));
+            }
+        }
+    }
     return Ok(()); //todo
 }
 
