@@ -123,7 +123,7 @@ impl WordKind<Word> for Word {
             Word::Bool(_) => WordType::Bool,
             Word::Null => WordType::Null,
             Word::Frozen(frozen) => WordType::Frozen(Box::new(frozen.to_wordtype())),
-            Word::Operator(op) => WordType::Operator(Box::new(op.sigs())),
+            Word::Operator(op) => WordType::Operator(op.to_wordtype()),
             Word::Function(f) => WordType::Function(Box::new(f.sig())),
             Word::ExitSignal => WordType::ExitSignal,
             Word::Type(_) => WordType::Type,
@@ -183,11 +183,11 @@ impl WordKind<Word> for Word {
             contents = wv1;
         }
         
-        return Ok(Frozen::WordList(
+        return Ok(
             FrozenWordList {
                 contents: contents,
                 env: env.clone(),
-            })
+            }.to_frozen()?
         ) 
     }
 
@@ -235,7 +235,7 @@ pub enum WordType {
     Bool,
     Null,
     Frozen(Box<Frozen<WordType>>),
-    Operator(Box<OperatorSigs>),
+    Operator(Operator<WordType>),
     Function(Box<Signature>),
     ExitSignal,
     Type,
@@ -247,7 +247,7 @@ impl WordKind<WordType> for WordType {
     fn from_function(f: Function<Self>) -> Self {
         return Self::Function(Box::new(f.sig()));
     }
-    
+
     fn from_wordtype(wt: WordType) -> Self {
         return wt;
     }
@@ -256,7 +256,7 @@ impl WordKind<WordType> for WordType {
         return Self::PrintSignal;
     }
 
-    fn from_number(n: usize) -> Self {
+    fn from_number(_: usize) -> Self {
         return Self::Number;
     }
 
@@ -267,7 +267,7 @@ impl WordKind<WordType> for WordType {
         }
     }
 
-    fn from_bool(b: bool) -> Self {
+    fn from_bool(_: bool) -> Self {
         return Self::Bool;
     }
 
@@ -280,11 +280,7 @@ impl WordKind<WordType> for WordType {
 
     fn to_operator(&self, mes: &str) -> Result<Operator<WordType>, String> {
         match self {
-            Self::Operator(_) => Ok(Operator::UnaryOp(UnaryOp {
-                fs: vec![],
-                priority: 11,
-                name: "".to_string(),
-            })),
+            Self::Operator(op) => Ok(op.clone()),
             _ => Err(mes.to_string()),
         }
     }
@@ -806,7 +802,7 @@ impl FrozenWordList<Word> {
     pub fn to_frozen(&self) -> Result<Frozen<Word>, String> {
         let env = self.get_env().clone();
         match env {
-            Env::Line => (),
+            Env::Line | Env::Set => (),
             Env::Scope | Env::Bracket => {
                 let wvv = Word::Symbol("|").explode(&self.get_contents());
                 return Ok(Frozen::Scope(wvv))
@@ -814,7 +810,7 @@ impl FrozenWordList<Word> {
             _ => panic!("Invalid Env type {} in eval() function.", env),
         }
 
-        let mut keyword = "";
+        let keyword;
         if let Some(Word::Keyword(kw)) = self.get(0) {
             keyword = kw;
         } else {
@@ -971,6 +967,25 @@ pub struct BinaryOp<T> {
     priority: usize,
 }
 
+impl BinaryOp<Word> {
+    pub fn to_wordtype(&self) -> BinaryOp<WordType> {
+        let mut fs: Vec<(BinarySig, fn(WordType, WordType) -> Result<WordType, String>)> = Vec::new();
+        fn f(_: WordType, _: WordType) -> Result<WordType, String> {
+            Ok(WordType::Null)
+        }
+
+        for (sig, _) in self.fs.clone() {
+            fs.push((sig, f))
+        }
+
+        return BinaryOp {
+            name: self.name(),
+            priority: self.priority,
+            fs: fs,
+        }
+    }
+}
+
 impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> BinaryOp<T> {
     pub fn name(&self) -> String {
         return self.name.clone();
@@ -1039,6 +1054,25 @@ pub struct UnaryOp<T> {
 pub enum OperatorSigs {
     Unary(Vec<UnarySig>),
     Binary(Vec<BinarySig>),
+}
+
+impl UnaryOp<Word> {
+    pub fn to_wordtype(&self) -> UnaryOp<WordType> {
+        let mut fs: Vec<(UnarySig, fn(WordType) -> Result<WordType, String>)> = Vec::new();
+        fn f(_: WordType) -> Result<WordType, String> {
+            Ok(WordType::Null)
+        }
+
+        for (sig, _) in self.fs.clone() {
+            fs.push((sig, f))
+        }
+
+        return UnaryOp {
+            name: self.name(),
+            priority: self.priority,
+            fs: fs,
+        }
+    }
 }
 
 impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> UnaryOp<T> {
@@ -1333,6 +1367,15 @@ pub enum Operator<T> {
     UnaryOp(UnaryOp<T>),
 }
 
+impl Operator<Word> {
+    pub fn to_wordtype(&self) -> Operator<WordType> {
+        match self {
+            Self::UnaryOp(uop) => Operator::UnaryOp(uop.to_wordtype()),
+            Self::BinaryOp(bop) => Operator::BinaryOp(bop.to_wordtype()),
+        }
+    }
+}
+
 impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> PartialEq for Operator<T> {
     fn eq(&self, rhs: &Self) -> bool {
         return self.name() == rhs.name();
@@ -1430,7 +1473,7 @@ pub struct PresetFunction<T: Clone + PartialEq> {
 
 impl PresetFunction<Word> {
     pub fn to_wordtype(&self) -> PresetFunction<WordType> {
-        let f = |wv: Vec<WordType>| {
+        let f = |_: Vec<WordType>| {
             return Ok(WordType::Null);
         };
 

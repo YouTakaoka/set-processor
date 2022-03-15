@@ -108,16 +108,6 @@ fn find_fwl<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> O
     return None;
 }
 
-fn find_frozen<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> Option<usize> {
-    for i in 0..wv.len() {
-        if let Ok(_) = wv[i].to_frozen("") {
-            return Some(i);
-        }
-    }
-
-    return None;
-}
-
 fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: Function<T>, fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<T, String> {
     if !fwl.env_is(Env::Bracket) {
         panic!("Token '(' must follow just after a function.");
@@ -175,15 +165,21 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
             let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm)?;
             let wt = w.get_type();
             if wt != fd.rett {
-                return Err(format!("Type error: Return type of function {:?} doesn't match the signature. Expected {}, got {}.",
-                            fd.name.clone(), fd.rett.clone(), wt));
+                return Err(format!(
+                    "Type error: Return type of function {:?} doesn't match the signature. Expected {}, got {}.",
+                    fd.name.clone(),
+                    fd.rett.clone(),
+                    wt
+                ));
             }
         }
     }
     return Ok(()); //todo
 }
 
-fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>(frozenv: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(Vec<Frozen<T>>, Bind<T>), String> {
+fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>
+    (frozenv: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(Vec<Frozen<T>>, Bind<T>), String> {
+
     let mut frozenv_def = Vec::new();
     let mut frozenv_other = Vec::new();
     for frozen in frozenv {
@@ -207,10 +203,12 @@ fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>(frozenv: &Vec
     return Ok((frozenv_other, bm));
 }
 
-fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>(frozenv: &Vec<Frozen<T>>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
-    let (frozenv_other, bindm1) = compile_defs(frozenv, bm)?;
-    let mut bindm = bindm1;
+fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>
+    (frozenv: &Vec<Frozen<T>>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
 
+    let (frozenv_other, bindm1) = compile_defs(frozenv, bm)?;
+
+    let mut bindm = bindm1;
     let mut word = T::null();
     for frozen in frozenv_other {
         let (w1, bm1) = eval(frozen, &bindm)?;
@@ -244,8 +242,8 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
         if let Ok(f) = contents[i].to_func("") {
             if let Some(w) = contents.get(i+1) {
                 if let Ok(Frozen::WordList(fwl1)) = w.to_frozen("") {
-                    if fwl.env_is(Env::Bracket) {
-                        let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
+                    if fwl1.env_is(Env::Bracket) {
+                        let word = apply_function(f.clone(), fwl1.clone(), &bindm)?;
                         let contents_new = subst_range(&contents, i, i + 1, word);
                         if let Frozen::WordList(fwl_new) = T::vec_to_frozen(contents_new, &env)? {
                             return eval_fwl(fwl_new, &bindm);
@@ -335,7 +333,7 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     if contents.len() == 1 {
         return Ok((contents[0].clone(), bindm));
     } else {
-        return Err("Parse error.".to_string());
+        return Err(format!("Parse error: More than 2 tokens remain: {}", vec_to_string(contents)));
     }
 }
 
@@ -410,7 +408,11 @@ pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
 }
 
 pub fn eval_line(s: &String, bindm: &Bind<Word>) -> Result<(Word, Bind<Word>), String> {
-    return eval(Frozen::from_string(s)?, bindm);
+    let frozen = Frozen::from_string(s)?;
+    if let Frozen::FuncDef(_) = frozen {
+        return_type_check(&vec![frozen.clone()], bindm)?;
+    }
+    return eval(frozen, bindm);
 }
 
 pub fn is_in<T: PartialEq>(x: T, vec: Vec<T>) -> bool {
@@ -470,6 +472,15 @@ pub fn eval_main(string: &String) -> Result<(), String> {
     }
 
     let (frozenv_other, bindm) = compile_defs(&frozenv, &Bind::new())?;
+
+    // 型チェック
+    let mut bmt = bindm.to_typebind();
+    for frozen in frozenv_other.clone() {
+        let (_, bmt1) = eval(frozen.to_wordtype(), &bmt)?;
+        bmt = bmt1;
+    }
+
+    // 実行部分
     let mut bm = bindm.clone();
     for frozen in frozenv_other {
         let (w1, bm1) = eval(frozen, &bm)?;
