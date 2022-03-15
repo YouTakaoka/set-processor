@@ -118,13 +118,6 @@ fn find_frozen<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -
     return None;
 }
 
-fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, String> {
-    match result {
-        Ok(val) => Ok(val),
-        Err(_) => Err(string),
-    }
-}
-
 fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: Function<T>, fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<T, String> {
     if !fwl.env_is(Env::Bracket) {
         panic!("Token '(' must follow just after a function.");
@@ -167,182 +160,45 @@ fn apply_user<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: UserFunction
     return Ok(ret);
 }
 
-fn parse_funcdef(identifier: Option<String>, wv: &Vec<Word>) -> Result<FuncDef, String> {
-    if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
-        if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
-            // 返り値のSignatureをつくる
-            let mut argst = Vec::new();
-            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error in the argument type part of function definition.")? {
-                let t = w.to_type("Type error: Type name expected.")?;
-                argst.push(t);
-            }
-
-            if wv_rett.len() != 1 {
-                return Err("Syntax error in the return type part of function definition.".to_string());
-            }
-            let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
-
-            if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
-                // ここが中心部
-                let mut args = Vec::new();
-                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error in the arguments part of function definition.")? {
-                    if let Word::Identifier(id) = w {
-                        if Some(id.clone()) == identifier {
-                            return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
-                                                identifier.unwrap()));
-                        }
-                        args.push(id);
-                    } else {
-                        return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
-                    }
-                }
-                let fdef = FuncDef{
-                    name: identifier,
-                    argtv: argst,
-                    rett: rett,
-                    argv: args,
-                    expr: wv_ret
-                };
-                return Ok(fdef);
-            } else {
-                return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
-            }
-        } else {
-            return Err("Syntax error: Token '->' not found in the type declaration of function definition.".to_string());
-        }
-    } else {
-        return Err("Syntax error: Token ';' not found in function definition.".to_string());
-    }
+fn return_type_check<T: Clone>(fv_def: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(), String> {
+    return Ok(()); //todo
 }
 
-fn return_type_check<T: Clone>(wvv_def: &Vec<Vec<T>>, bindm: &Bind<T>) -> Result<(), String> {
-    return Ok(()); //tofix
-}
-
-fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>(wvv: &Vec<Vec<T>>, bindm: &Bind<T>) -> Result<(Vec<Vec<T>>, Bind<T>), String> {
-    let mut wvv_def = Vec::new();
-    let mut wvv_other = Vec::new();
-    for wv in wvv {
-        if wv.get(0) == Some(&T::from_keyword("def")) {
-            wvv_def.push(wv.clone());
+fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>(frozenv: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(Vec<Frozen<T>>, Bind<T>), String> {
+    let mut frozenv_def = Vec::new();
+    let mut frozenv_other = Vec::new();
+    for frozen in frozenv {
+        if let Frozen::FuncDef(_) = frozen {
+            frozenv_def.push(frozen.clone());
         } else {
-            wvv_other.push(wv.clone());
+            frozenv_other.push(frozen.clone());
         }
     }
 
     if T::is_wordtype() {
-        return_type_check(&wvv_def, bindm)?;
+        return_type_check(&frozenv_def, bindm)?;
     }
 
     let mut bm = bindm.clone();
-    for wv in wvv_def {
-        let frozen = T::vec_to_frozen(wv.clone(), &Env::Line)?;
+    for frozen in frozenv_def {
         let (_, bm1) = eval(frozen, &bm)?;
         bm = bm1;
     }
 
-    return Ok((wvv_other, bm));
+    return Ok((frozenv_other, bm));
 }
 
-fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>(wvv: &Vec<Vec<T>>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
-    let (wvv_other, bindm1) = compile_defs(&wvv, bm)?;
+fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>(frozenv: &Vec<Frozen<T>>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
+    let (frozenv_other, bindm1) = compile_defs(frozenv, bm)?;
     let mut bindm = bindm1;
 
     let mut word = T::null();
-    for wv in wvv_other {
-        let frozen = T::vec_to_frozen(wv.clone(), &Env::Line)?;
+    for frozen in frozenv_other {
         let (w1, bm1) = eval(frozen, &bindm)?;
         word = w1;
         bindm = bm1;
     }
     return Ok((word, bindm));
-}
-
-fn eval_special(fwl: FrozenWordList<Word>) -> Result<Option<Frozen<Word>>, String> {
-    if fwl.is_empty() {
-        return Ok(None);
-    }
-
-    let env = fwl.get_env().clone();
-
-    match env {
-        Env::Line => (),
-        Env::Scope | Env::Bracket => {
-            let wvv = Word::Symbol("|").explode(&fwl.get_contents());
-            return Ok(Some(Frozen::Scope(wvv)))
-        },
-        _ => panic!("Invalid Env type {} in eval() function.", env),
-    }
-    
-    // 先頭がletキーワードだった場合の処理
-    if let Some(Word::Keyword("let")) = fwl.get(0) {
-        if fwl.len() < 4 {
-            return Err("Parse error: 'let' statement is too short.".to_string());
-        }
-
-        if let Some(Word::Symbol("=")) = fwl.get(2) {
-            let word1 = fwl.get(1).unwrap();
-            if let Word::Identifier(identifier) = &word1 {
-                // ここが中心部
-                let mut wordv = fwl.get_contents();
-                let expr = wordv.split_off(3);
-                return Ok(Some(Frozen::LetExpr(LetExpr {identifier: identifier.clone(), expr: expr})));
-            }
-
-            // word1がIdentifierでなかった場合
-            return Err(format!("Name error: Cannot use '{}' as identifier.", word1.to_string()));
-        }
-
-        // 2番目のトークンが'='でなかった場合
-        return Err("Syntax error: Token '=' needed after 'let' keyword.".to_string());
-    }
-
-    // if文の処理
-    if let Some(Word::Keyword("if")) = fwl.get(0) {
-        // then節を探す(なければerror)
-        let option_then = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::Keyword("if"), Word::Keyword("then")),
-                                        "Syntax error: Keyword 'then' not found after 'if' keyword.".to_string())?;
-        let (_, i_then) = option_then.unwrap();
-
-        // else節を探す(なければerror)
-        let option_else = rewrite_error(Word::find_bracket(&fwl.get_contents(), Word::Keyword("if"), Word::Keyword("else")),
-                                        "Syntax error: Keyword 'else' not found after 'if' keyword.".to_string())?;
-        let (_, i_else) = option_else.unwrap();
-
-        // thenがelseより後ろならerror
-        if i_then > i_else {
-            return Err("Syntax error: Keyword 'else' found before 'then'.".to_string());
-        }
-
-        // if節、then節、else節に分解
-        let wordv = fwl.get_contents();
-        let (wordv_other, wv_else) = split_drop(&wordv, i_else, i_else);
-        let (mut wv_if, wv_then) = split_drop(&wordv_other, i_then, i_then);
-        wv_if.remove(0);
-
-        return Ok(Some(Frozen::IfExpr(IfExpr {wv_if: wv_if, wv_then: wv_then, wv_else: wv_else})));
-    }
-
-    // def(関数定義)文の処理
-    if let Some(Word::Keyword("def")) = fwl.get(0) {
-        if fwl.get(2) != Some(Word::Symbol(":")) {
-            return Err("Syntax error: Token ':' needed after 'def' token.".to_string());
-        } else if fwl.get(2) == None {
-            return Err("Parse error: 'def' statement is too short.".to_string());
-        }
-
-        if let Some(Word::Identifier(identifier)) = fwl.get(1) {
-            // ここが中心部
-            let (_, wv1) = split_drop(&fwl.get_contents(), 2, 2);
-            let f = parse_funcdef(Some(identifier.clone()), &wv1)?;
-            return Ok(Some(Frozen::FuncDef(f)));
-        } else {
-            let w = fwl.get(1).unwrap();
-            return Err(format!("Name error: Token '{}' cannot used as identifier.", w));
-        }
-    }
-
-    return Ok(None);
 }
 
 fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
@@ -402,7 +258,7 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                     _ => panic!("Env error. Env {} in {}.", fwl1.get_env(), fwl.get_env()),
                 }
             },
-            Err(word) => panic!("eval: PresetFunction find_fwl() brought index of non-FrozenWord: {}", word.to_string()),
+            _ => panic!("eval: PresetFunction find_fwl() brought index of non-FrozenWordList"),
         }
     }
 
@@ -441,7 +297,7 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                 let w_res = binop.apply(w1, w2)?;
                 wv1.push(w_res);
                 wv1.append(&mut wv2);
-                return eval_fwl(T::vec_to_fwl(wv1, &env)?, &bindm);
+                return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
             },
             Operator::UnaryOp(unop) => {
                 if wv2.is_empty() {
@@ -451,7 +307,7 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                 let w_res = unop.apply(w)?;
                 wv1.push(w_res);
                 wv1.append(&mut wv2);
-                return eval_fwl(T::vec_to_fwl(wv1, &env)?, &bindm);
+                return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
             },
         }
     }
@@ -464,8 +320,10 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     }
 }
 
-pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>(frozen: Frozen<T>, bindm: Bind<T>) -> Result<(T, Bind<T>), String> {
+pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
+    (frozen: Frozen<T>, bindm: &Bind<T>) -> Result<(T, Bind<T>), String> {
     //todo
+    return Err("stub".to_string());
 }
 
 pub fn eval_line(s: &String, bindm: &Bind<Word>) -> Result<(Word, Bind<Word>), String> {
@@ -522,17 +380,16 @@ pub fn eval_main(string: &String) -> Result<(), String> {
         }
     }
 
-    let mut wvv: Vec<Vec<Word>> = Vec::new();
+    let mut frozenv: Vec<Frozen<Word>> = Vec::new();
     for tv in tvv {
         let frozen = Frozen::from_tokenv(tv, Env::Line)?;
-        wvv.push(fwl.get_contents());
+        frozenv.push(frozen);
     }
 
-    let (wvv_other, bindm) = compile_defs(&wvv, &Bind::new())?;
+    let (frozenv_other, bindm) = compile_defs(&frozenv, &Bind::new())?;
     let mut bm = bindm.clone();
-    for wv in wvv_other {
-        let fwl = Word::vec_to_frozen(wv, &Env::Line)?;
-        let (w1, bm1) = eval(fwl, &bm)?;
+    for frozen in frozenv_other {
+        let (w1, bm1) = eval(frozen, &bm)?;
         bm = bm1;
         match w1 {
             Word::PrintSignal(s) => println!("{}", s),

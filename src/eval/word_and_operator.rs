@@ -117,7 +117,7 @@ impl WordKind<Word> for Word {
             Word::Identifier(s) => WordType::Identifier(s.clone()),
             Word::Bool(_) => WordType::Bool,
             Word::Null => WordType::Null,
-            Word::Frozen(frozen) => WordType::Frozen(frozen.to_wordtype()),
+            Word::Frozen(frozen) => WordType::Frozen(Box::new(frozen.to_wordtype())),
             Word::Operator(op) => WordType::Operator(Box::new(op.sigs())),
             Word::Function(f) => WordType::Function(Box::new(f.sig())),
             Word::ExitSignal => WordType::ExitSignal,
@@ -405,6 +405,14 @@ impl fmt::Display for Word {
 }
 
 impl Word {
+    pub fn vec_to_type(wv: &Vec<Word>) -> Vec<WordType> {
+        let mut wtv = Vec::new();
+        for w in wv {
+            wtv.push(w.get_type());
+        }
+        return wtv;
+    }
+
     pub fn from_token(token: Token) -> Word {
         match token {
             Token::Keyword(s) => {
@@ -608,10 +616,19 @@ impl fmt::Display for Env {
 #[derive(Clone, PartialEq)]
 pub enum Frozen<T> {
     WordList(FrozenWordList<T>),
-    IfExpr(IfExpr),
-    Scope(Vec<Vec<Word>>),
-    LetExpr(LetExpr),
-    FuncDef(FuncDef),
+    IfExpr(IfExpr<T>),
+    Scope(Vec<Vec<T>>),
+    LetExpr(LetExpr<T>),
+    FuncDef(FuncDef<T>),
+}
+
+impl<T: Clone + PartialEq + fmt::Display> Frozen<T> {
+    pub fn to_string(&self) -> String {
+        match self {
+            Self::WordList(fwl) => fwl.to_string(),
+            _ => "(frozen)".to_string(),
+        }
+    }
 }
 
 impl Frozen<Word> {
@@ -629,28 +646,75 @@ impl Frozen<Word> {
 
         return Word::vec_to_frozen(wv, &env);
     }
+
+    pub fn to_wordtype(&self) -> Frozen<WordType> {
+        match self {
+            Self::WordList(fwl) => Frozen::WordList(fwl.to_wordtype()),
+            Self::FuncDef(fd) => Frozen::FuncDef(fd.to_wordtype()),
+            Self::LetExpr(le) => Frozen::LetExpr(le.to_wordtype()),
+            Self::IfExpr(ie) => Frozen::IfExpr(ie.to_wordtype()),
+            Self::Scope(wvv) => {
+                let mut wtvv = Vec::new();
+                for wv in wvv {
+                    wtvv.push(Word::vec_to_type(wv));
+                }
+                return Frozen::Scope(wtvv);
+            },
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
-pub struct FuncDef {
+pub struct FuncDef<T> {
     pub name: Option<String>,
     pub argtv: Vec<WordType>,
     pub rett: WordType,
     pub argv: Vec<String>,
-    pub expr: Vec<Word>,
+    pub expr: Vec<T>,
+}
+
+impl FuncDef<Word> {
+    pub fn to_wordtype(&self) -> FuncDef<WordType> {
+        return FuncDef {
+            name: self.name.clone(),
+            argtv: self.argtv.clone(),
+            rett: self.rett.clone(),
+            argv: self.argv.clone(),
+            expr: Word::vec_to_type(&self.expr),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
-pub struct IfExpr {
-    pub wv_if: Vec<Word>,
-    pub wv_then: Vec<Word>,
-    pub wv_else: Vec<Word>,
+pub struct IfExpr<T> {
+    pub wv_if: Vec<T>,
+    pub wv_then: Vec<T>,
+    pub wv_else: Vec<T>,
+}
+
+impl IfExpr<Word> {
+    pub fn to_wordtype(&self) -> IfExpr<WordType> {
+        return IfExpr {
+            wv_if: Word::vec_to_type(&self.wv_if),
+            wv_else: Word::vec_to_type(&self.wv_else),
+            wv_then: Word::vec_to_type(&self.wv_then),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
-pub struct LetExpr {
+pub struct LetExpr<T> {
     pub identifier: String,
-    pub expr: Vec<Word>,
+    pub expr: Vec<T>,
+}
+
+impl LetExpr<Word> {
+    pub fn to_wordtype(&self) -> LetExpr<WordType> {
+        return LetExpr {
+            identifier: self.identifier.clone(),
+            expr: Word::vec_to_type(&self.expr),
+        }
+    }
 }
 
 #[derive(Clone, PartialEq)]
@@ -677,14 +741,6 @@ impl FrozenWordList<Word> {
         }
 
         return Ok(i_bound);
-    }
-
-    // Dummy function
-    fn to_wordtype(&self) -> FrozenWordList<WordType> {
-        return FrozenWordList::<WordType> {
-            contents: Vec::new(),
-            env: Env::Line,
-        };
     }
 }
 
@@ -726,6 +782,160 @@ impl<T: Clone + PartialEq + std::fmt::Display> FrozenWordList<T> {
         string = format!("[{}]", string);
 
         return string;
+    }
+}
+
+impl FrozenWordList<Word> {
+    pub fn to_wordtype(&self) -> FrozenWordList<WordType> {
+        let contents = Word::vec_to_type(&self.get_contents());
+        return FrozenWordList {
+            contents: contents,
+            env: self.get_env(),
+        }
+    }
+
+    pub fn to_frozen(&self) -> Result<Frozen<Word>, String> {
+        let env = self.get_env().clone();
+        match env {
+            Env::Line => (),
+            Env::Scope | Env::Bracket => {
+                let wvv = Word::Symbol("|").explode(&self.get_contents());
+                return Ok(Frozen::Scope(wvv))
+            },
+            _ => panic!("Invalid Env type {} in eval() function.", env),
+        }
+
+        let mut keyword = "";
+        if let Some(Word::Keyword(kw)) = self.get(0) {
+            keyword = kw;
+        } else {
+            return Ok(Frozen::WordList(self.clone()));
+        }
+        
+        // 先頭がletキーワードだった場合の処理
+        if keyword == "let" {
+            if self.len() < 4 {
+                return Err("Parse error: 'let' statement is too short.".to_string());
+            }
+    
+            if let Some(Word::Symbol("=")) = self.get(2) {
+                let word1 = self.get(1).unwrap();
+                if let Word::Identifier(identifier) = &word1 {
+                    // ここが中心部
+                    let mut wordv = self.get_contents();
+                    let expr = wordv.split_off(3);
+                    return Ok(Frozen::LetExpr(LetExpr {identifier: identifier.clone(), expr: expr}));
+                }
+    
+                // word1がIdentifierでなかった場合
+                return Err(format!("Name error: Cannot use '{}' as identifier.", word1.to_string()));
+            }
+    
+            // 2番目のトークンが'='でなかった場合
+            return Err("Syntax error: Token '=' needed after 'let' keyword.".to_string());
+        }
+    
+        // if文の処理
+        if keyword == "if" {
+            // then節を探す(なければerror)
+            let option_then = rewrite_error(Word::find_bracket(&self.get_contents(), Word::Keyword("if"), Word::Keyword("then")),
+                                            "Syntax error: Keyword 'then' not found after 'if' keyword.".to_string())?;
+            let (_, i_then) = option_then.unwrap();
+    
+            // else節を探す(なければerror)
+            let option_else = rewrite_error(Word::find_bracket(&self.get_contents(), Word::Keyword("if"), Word::Keyword("else")),
+                                            "Syntax error: Keyword 'else' not found after 'if' keyword.".to_string())?;
+            let (_, i_else) = option_else.unwrap();
+    
+            // thenがelseより後ろならerror
+            if i_then > i_else {
+                return Err("Syntax error: Keyword 'else' found before 'then'.".to_string());
+            }
+    
+            // if節、then節、else節に分解
+            let wordv = self.get_contents();
+            let (wordv_other, wv_else) = split_drop(&wordv, i_else, i_else);
+            let (mut wv_if, wv_then) = split_drop(&wordv_other, i_then, i_then);
+            wv_if.remove(0);
+    
+            return Ok(Frozen::IfExpr(IfExpr {wv_if: wv_if, wv_then: wv_then, wv_else: wv_else}));
+        }
+    
+        // def(関数定義)文の処理
+        if let Some(Word::Keyword("def")) = self.get(0) {
+            if self.get(2) != Some(Word::Symbol(":")) {
+                return Err("Syntax error: Token ':' needed after 'def' token.".to_string());
+            } else if self.get(2) == None {
+                return Err("Parse error: 'def' statement is too short.".to_string());
+            }
+    
+            if let Some(Word::Identifier(identifier)) = self.get(1) {
+                // ここが中心部
+                let (_, wv1) = split_drop(&self.get_contents(), 2, 2);
+                let f = parse_funcdef(Some(identifier.clone()), &wv1)?;
+                return Ok(Frozen::FuncDef(f));
+            } else {
+                let w = self.get(1).unwrap();
+                return Err(format!("Name error: Token '{}' cannot used as identifier.", w));
+            }
+        }
+    
+        panic!("Unrecognized 'keyword': {}", keyword);
+    }
+}
+
+fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, String> {
+    match result {
+        Ok(val) => Ok(val),
+        Err(_) => Err(string),
+    }
+}
+
+fn parse_funcdef(identifier: Option<String>, wv: &Vec<Word>) -> Result<FuncDef<Word>, String> {
+    if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
+        if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
+            // 返り値のSignatureをつくる
+            let mut argst = Vec::new();
+            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error in the argument type part of function definition.")? {
+                let t = w.to_type("Type error: Type name expected.")?;
+                argst.push(t);
+            }
+
+            if wv_rett.len() != 1 {
+                return Err("Syntax error in the return type part of function definition.".to_string());
+            }
+            let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
+
+            if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
+                // ここが中心部
+                let mut args = Vec::new();
+                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error in the arguments part of function definition.")? {
+                    if let Word::Identifier(id) = w {
+                        if Some(id.clone()) == identifier {
+                            return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
+                                                identifier.unwrap()));
+                        }
+                        args.push(id);
+                    } else {
+                        return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
+                    }
+                }
+                let fdef = FuncDef{
+                    name: identifier,
+                    argtv: argst,
+                    rett: rett,
+                    argv: args,
+                    expr: wv_ret
+                };
+                return Ok(fdef);
+            } else {
+                return Err("Syntax error: Token '->' not found in the main part of function definition.".to_string());
+            }
+        } else {
+            return Err("Syntax error: Token '->' not found in the type declaration of function definition.".to_string());
+        }
+    } else {
+        return Err("Syntax error: Token ';' not found in function definition.".to_string());
     }
 }
 
