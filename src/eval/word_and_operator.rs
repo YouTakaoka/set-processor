@@ -32,6 +32,7 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn from_bool(b: bool) -> Self;
     fn from_number(n: usize) -> Self;
     fn from_printsignal(s: String) -> Self;
+    fn from_wordtype(wt: WordType) -> Self;
 }
 
 #[derive(Clone, PartialEq)]
@@ -52,6 +53,10 @@ pub enum Word {
 }
 
 impl WordKind<Word> for Word {
+    fn from_wordtype(wt: WordType) -> Self {
+        return Word::Null;
+    }
+
     fn from_printsignal(s: String) -> Self {
         return Self::PrintSignal(s);
     }
@@ -232,6 +237,10 @@ pub enum WordType {
 }
 
 impl WordKind<WordType> for WordType {
+    fn from_wordtype(wt: WordType) -> Self {
+        return wt;
+    }
+
     fn from_printsignal(_: String) -> Self {
         return Self::PrintSignal;
     }
@@ -764,7 +773,11 @@ impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> BinaryOp<T> {
     pub fn apply(&self, w1: T, w2: T) -> Result<T, String> {
         for (sig, f) in self.fs.clone() {
             if (w1.get_type(), w2.get_type()) == sig.args {
-                return f(w1, w2);
+                if T::is_wordtype() {
+                    return Ok(T::from_wordtype(sig.ret));
+                } else {
+                    return f(w1, w2);
+                }
             }
         }
         return Err(format!("Bianry operator '{}': Type error. Expected one of pairs of types {}, got ({},{}).",
@@ -813,7 +826,11 @@ impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> UnaryOp<T> {
     pub fn apply(&self, w: T) -> Result<T, String> {
         for (sig, f) in self.fs.clone() {
             if sig.arg == w.get_type() {
-                return f(w);
+                if T::is_wordtype() {
+                    return Ok(T::from_wordtype(sig.ret.clone()));
+                } else {
+                    return f(w);
+                }
             }
         }
         return Err(format!("Unary operator '{}': Type error at the first argument. Expected one of {}, but got {}.",
@@ -1251,8 +1268,8 @@ pub fn preset_functions() -> std::collections::HashMap<String, PresetFunction<Wo
 
 #[derive(Clone, PartialEq)]
 pub struct Signature {
-    args: Vec<WordType>,
-    ret: WordType,
+    pub args: Vec<WordType>,
+    pub ret: WordType,
 }
 
 impl Signature {
