@@ -341,8 +341,72 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
 
 pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
     (frozen: Frozen<T>, bindm: &Bind<T>) -> Result<(T, Bind<T>), String> {
-    //todo
-    return Err("stub".to_string());
+
+    match frozen {
+        Frozen::WordList(fwl) => return eval_fwl(fwl, bindm),
+        Frozen::Scope(wvv) => {
+            let mut frozenv = Vec::new();
+            for wv in wvv {
+                frozenv.push(T::vec_to_frozen(wv, &Env::Line)?);
+            }
+            return eval_scope(&frozenv, bindm);
+        },
+        Frozen::FuncDef(fd) => {
+            let mut bm = bindm.clone();
+            let mut w_func = T::null();
+            if let Some(name) = fd.name.clone() {
+                w_func = T::from_function(Function::User(UserFunction::new(
+                    Some(name.clone()),
+                    Signature::new(fd.argtv.clone(), fd.rett.clone()),
+                    fd.argv,
+                    fd.expr.clone(),
+                )));
+                bm.insert_func(
+                    name.clone(),
+                    w_func.clone()
+                )
+            }
+            return Ok((w_func, bm));
+        },
+        Frozen::IfExpr(ie) => {
+            let (w_if, bm1) = eval(T::vec_to_frozen(ie.wv_if.clone(), &Env::Line)?, bindm)?;
+            if w_if.get_type() != WordType::Bool {
+                return Err(format!("Type error: 'if' clause returned non-Bool value: {}", w_if));
+            }
+
+            if T::is_wordtype() { // T == WordTypeの場合
+                let (wt_then, _) = eval(T::vec_to_frozen(ie.wv_then.clone(), &Env::Line)?, &bm1)?;
+                let (wt_else, _) = eval(T::vec_to_frozen(ie.wv_else.clone(), &Env::Line)?, &bm1)?;
+                if wt_then == wt_else {
+                    return Ok((wt_then, bindm.clone()));
+                } else {
+                    return Err(format!(
+                        "Type error: Mismatch in return type of 'then' clause ({}) and 'else' clause ({}).",
+                        wt_then, wt_else
+                    ))
+                }
+            } else { // T == Wordの場合
+                if w_if.to_bool("")? { // true
+                    let (wt_then, _) = eval(T::vec_to_frozen(ie.wv_then.clone(), &Env::Line)?, &bm1)?;
+                    return Ok((wt_then, bindm.clone()));
+                } else { // false
+                    let (wt_else, _) = eval(T::vec_to_frozen(ie.wv_else.clone(), &Env::Line)?, &bm1)?;
+                    return Ok((wt_else, bindm.clone()));
+                }
+            }
+        },
+        Frozen::LetExpr(le) => {
+            let expr = le.expr.clone();
+            if let Some(_) = bindm.get(&le.identifier) {
+                return Err(format!("Name error: '{}' is already reserved as identifier.", le.identifier));
+            } else {
+                let (w_ret, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, bindm)?;
+                let mut bm1 = bindm.clone();
+                bm1.insert(le.identifier.clone(), w_ret.clone());
+                return Ok((w_ret, bm1));
+            }
+        }
+    }
 }
 
 pub fn eval_line(s: &String, bindm: &Bind<Word>) -> Result<(Word, Bind<Word>), String> {

@@ -33,6 +33,7 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn from_number(n: usize) -> Self;
     fn from_printsignal(s: String) -> Self;
     fn from_wordtype(wt: WordType) -> Self;
+    fn from_function(f: Function<T>) -> Self;
 }
 
 #[derive(Clone, PartialEq)]
@@ -53,6 +54,10 @@ pub enum Word {
 }
 
 impl WordKind<Word> for Word {
+    fn from_function(f: Function<Self>) -> Self {
+        return Self::Function(f);
+    }
+
     fn from_wordtype(_: WordType) -> Self {
         return Word::Null;
     }
@@ -239,6 +244,10 @@ pub enum WordType {
 }
 
 impl WordKind<WordType> for WordType {
+    fn from_function(f: Function<Self>) -> Self {
+        return Self::Function(Box::new(f.sig()));
+    }
+    
     fn from_wordtype(wt: WordType) -> Self {
         return wt;
     }
