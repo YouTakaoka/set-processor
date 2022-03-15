@@ -71,9 +71,9 @@ fn substitute<T: Clone + WordKind<T> + fmt::Display + PartialEq>(word: &T, bindm
     return Ok(None);
 }
 
-fn setlist_from_frozen<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: FrozenWordList<T>, bindm: &Bind<T>) -> Result<SetList, String> {
+fn setlist_from_fwl<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: FrozenWordList<T>, bindm: &Bind<T>) -> Result<SetList, String> {
     if !fwl.env_is(Env::Set) {
-        panic!("setlist_from_frozen: Irregal env: {}", fwl.get_env());
+        panic!("setlist_from_fwl: Irregal env: {}", fwl.get_env());
     }
 
     if fwl.is_empty() {
@@ -84,8 +84,8 @@ fn setlist_from_frozen<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: F
     let mut contents: Vec<Set> = Vec::new();
 
     for wv1 in T::from_symbol(",").explode(&wv) {
-        let fwl1 = T::vec_to_frozen(wv1, &Env::Line)?;
-        let (word, _) = eval(fwl1, bindm)?;
+        let frozen = T::vec_to_frozen(wv1, &Env::Line)?;
+        let (word, _) = eval(frozen, bindm)?;
         let set = word.to_set("Type error: Non-set object found in {} symbol.")?;
         contents.push(set);
     }
@@ -93,9 +93,19 @@ fn setlist_from_frozen<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: F
     return Ok(SetList::new(contents));
 }
 
-fn set_from_frozen<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: FrozenWordList<T>, bindm: &Bind<T>) -> Result<Set, String> {
-    let sl = setlist_from_frozen(fwl, bindm)?;
+fn set_from_fwl<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: FrozenWordList<T>, bindm: &Bind<T>) -> Result<Set, String> {
+    let sl = setlist_from_fwl(fwl, bindm)?;
     return Ok(sl.uniquify());
+}
+
+fn find_fwl<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> Option<usize> {
+    for i in 0..wv.len() {
+        if let Ok(Frozen::WordList(_)) = wv[i].to_frozen("") {
+            return Some(i);
+        }
+    }
+
+    return None;
 }
 
 fn find_frozen<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> Option<usize> {
@@ -123,8 +133,8 @@ fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: Function
     let mut wv = Vec::new();
     let contents = fwl.get_contents();
     for wv1 in T::from_symbol(",").explode(&contents) {
-        let fwl1 = T::vec_to_frozen(wv1, &Env::Line)?;
-        let (word1, _) = eval(fwl1, bm)?;
+        let frozen = T::vec_to_frozen(wv1, &Env::Line)?;
+        let (word1, _) = eval(frozen, bm)?;
         wv.push(word1);
     }
 
@@ -205,7 +215,7 @@ fn parse_funcdef(identifier: Option<String>, wv: &Vec<Word>) -> Result<FuncDef, 
     }
 }
 
-fn return_type_check<T: Clone>(wvv: &Vec<Vec<T>>, bindm: &Bind<T>) -> Result<(), String> {
+fn return_type_check<T: Clone>(wvv_def: &Vec<Vec<T>>, bindm: &Bind<T>) -> Result<(), String> {
     return Ok(()); //tofix
 }
 
@@ -226,8 +236,8 @@ fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>(wvv: &Vec<Vec
 
     let mut bm = bindm.clone();
     for wv in wvv_def {
-        let fwl1 = T::vec_to_frozen(wv.clone(), &Env::Line)?;
-        let (_, bm1) = eval(fwl1, &bm)?;
+        let frozen = T::vec_to_frozen(wv.clone(), &Env::Line)?;
+        let (_, bm1) = eval(frozen, &bm)?;
         bm = bm1;
     }
 
@@ -240,8 +250,8 @@ fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>(wvv: &Vec<Vec<T
 
     let mut word = T::null();
     for wv in wvv_other {
-        let fwl1 = T::vec_to_frozen(wv.clone(), &Env::Line)?;
-        let (w1, bm1) = eval(fwl1, &bindm)?;
+        let frozen = T::vec_to_frozen(wv.clone(), &Env::Line)?;
+        let (w1, bm1) = eval(frozen, &bindm)?;
         word = w1;
         bindm = bm1;
     }
@@ -335,7 +345,7 @@ fn eval_special(fwl: FrozenWordList<Word>) -> Result<Option<Frozen<Word>>, Strin
     return Ok(None);
 }
 
-fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
+fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     (fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
     let env = fwl.get_env();
     let mut bindm = bm.clone();
@@ -358,12 +368,13 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     for i in 0..contents.len() {
         if let Ok(f) = contents[i].to_func("") {
             if let Some(w) = contents.get(i+1) {
-                if let Ok(fwl) = w.to_frozen("") {
+                if let Ok(Frozen::WordList(fwl1)) = w.to_frozen("") {
                     if fwl.env_is(Env::Bracket) {
                         let word = apply_function(f.clone(), fwl.clone(), &bindm)?;
                         let contents_new = subst_range(&contents, i, i + 1, word);
-                        let fwl_new = T::vec_to_frozen(contents_new, &env)?;
-                        return eval(fwl_new, &bindm);
+                        if let Frozen::WordList(fwl_new) = T::vec_to_frozen(contents_new, &env)? {
+                            return eval_fwl(fwl_new, &bindm);
+                        }
                     }
                 }
             }
@@ -371,27 +382,27 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     }
 
     // 括弧処理
-    while let Some(i) = find_frozen(&contents) {
+    while let Some(i) = find_fwl(&contents) {
         match contents[i].to_frozen("") {
-            Ok(fwl1) => {
+            Ok(Frozen::WordList(fwl1)) => {
                 match fwl1.get_env() {
                     Env::Scope => {
-                        let (word, _) = eval(fwl1, &bindm)?;
+                        let (word, _) = eval_fwl(fwl1, &bindm)?;
                         contents[i] = word;
                     },
                     Env::Bracket => {
-                        let (word, bindm1) = eval(fwl1, &bindm)?;
+                        let (word, bindm1) = eval_fwl(fwl1, &bindm)?;
                         contents[i] = word;
                         bindm = bindm1;
                     },
                     Env::Set => { // Setの場合
-                        let set = set_from_frozen(fwl1, &bindm)?;
+                        let set = set_from_fwl(fwl1, &bindm)?;
                         contents[i] = T::from_set(set);
                     },
                     _ => panic!("Env error. Env {} in {}.", fwl1.get_env(), fwl.get_env()),
                 }
             },
-            Err(word) => panic!("eval: PresetFunction find_frozen() brought index of non-FrozenWord: {}", word.to_string()),
+            Err(word) => panic!("eval: PresetFunction find_fwl() brought index of non-FrozenWord: {}", word.to_string()),
         }
     }
 
@@ -430,7 +441,7 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                 let w_res = binop.apply(w1, w2)?;
                 wv1.push(w_res);
                 wv1.append(&mut wv2);
-                return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
+                return eval_fwl(T::vec_to_fwl(wv1, &env)?, &bindm);
             },
             Operator::UnaryOp(unop) => {
                 if wv2.is_empty() {
@@ -440,7 +451,7 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                 let w_res = unop.apply(w)?;
                 wv1.push(w_res);
                 wv1.append(&mut wv2);
-                return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
+                return eval_fwl(T::vec_to_fwl(wv1, &env)?, &bindm);
             },
         }
     }
@@ -453,8 +464,12 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     }
 }
 
+pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>(frozen: Frozen<T>, bindm: Bind<T>) -> Result<(T, Bind<T>), String> {
+    //todo
+}
+
 pub fn eval_line(s: &String, bindm: &Bind<Word>) -> Result<(Word, Bind<Word>), String> {
-    return eval(FrozenWordList::from_string(s)?, bindm);
+    return eval(Frozen::from_string(s)?, bindm);
 }
 
 pub fn is_in<T: PartialEq>(x: T, vec: Vec<T>) -> bool {
@@ -509,7 +524,7 @@ pub fn eval_main(string: &String) -> Result<(), String> {
 
     let mut wvv: Vec<Vec<Word>> = Vec::new();
     for tv in tvv {
-        let fwl = FrozenWordList::from_tokenv(tv, Env::Line)?;
+        let frozen = Frozen::from_tokenv(tv, Env::Line)?;
         wvv.push(fwl.get_contents());
     }
 

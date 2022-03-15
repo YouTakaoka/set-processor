@@ -19,10 +19,10 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn from_userf(uf: UserFunction<T>) -> Self;
     fn from_word(w: Word) -> Self;
     fn to_func(&self, mes: &str) -> Result<Function<T>, String>;
-    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList<T>, String>;
+    fn to_frozen(&self, mes: &str) -> Result<Frozen<T>, String>;
     fn to_operator(&self, mes: &str) -> Result<Operator<T>, String>;
     fn to_number(&self, mes: &str) -> Result<usize, String>;
-    fn vec_to_frozen(vec: Vec<T>, env: &Env) -> Result<FrozenWordList<T>, String>;
+    fn vec_to_frozen(vec: Vec<T>, env: &Env) -> Result<Frozen<T>, String>;
     fn to_identifier(&self, mes: &str) -> Result<String, String>;
     fn explode(&self, wordv: &Vec<T>) -> Vec<Vec<T>>;
     fn find_word(wordv: &Vec<T>, word: Self) -> Option<usize>;
@@ -43,7 +43,7 @@ pub enum Word {
     Identifier(String),
     Bool(bool),
     Null,
-    Frozen(FrozenWordList<Word>),
+    Frozen(Frozen<Word>),
     Operator(Operator<Word>),
     Function(Function<Word>),
     ExitSignal,
@@ -53,7 +53,7 @@ pub enum Word {
 }
 
 impl WordKind<Word> for Word {
-    fn from_wordtype(wt: WordType) -> Self {
+    fn from_wordtype(_: WordType) -> Self {
         return Word::Null;
     }
 
@@ -117,7 +117,7 @@ impl WordKind<Word> for Word {
             Word::Identifier(s) => WordType::Identifier(s.clone()),
             Word::Bool(_) => WordType::Bool,
             Word::Null => WordType::Null,
-            Word::Frozen(fwl) => WordType::Frozen(fwl.to_wordtype()),
+            Word::Frozen(frozen) => WordType::Frozen(frozen.to_wordtype()),
             Word::Operator(op) => WordType::Operator(Box::new(op.sigs())),
             Word::Function(f) => WordType::Function(Box::new(f.sig())),
             Word::ExitSignal => WordType::ExitSignal,
@@ -146,17 +146,17 @@ impl WordKind<Word> for Word {
         return w;
     }
 
-    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList<Self>, String> {
+    fn to_frozen(&self, mes: &str) -> Result<Frozen<Self>, String> {
         match self {
-            Self::Frozen(fwl) => Ok(fwl.clone()),
+            Self::Frozen(frozen) => Ok(frozen.clone()),
             _ => Err(mes.to_string()),
         }
     }
 
-    fn vec_to_frozen(wv: Vec<Self>, env: &Env) -> Result<FrozenWordList<Self>, String> {
+    fn vec_to_frozen(wv: Vec<Self>, env: &Env) -> Result<Frozen<Self>, String> {
         let mut contents = wv;
 
-        while let Some((ib, ie)) = FrozenWordList::find_frozenbound(&contents)? {
+        while let Some((ib, ie)) = FrozenWordList::find_fwlbound(&contents)? {
             let b = contents[ib].to_string();
             let e = contents[ie].to_string();
             let mut env1 = Env::from_bound(b, e)?;
@@ -178,10 +178,12 @@ impl WordKind<Word> for Word {
             contents = wv1;
         }
         
-        return Ok(FrozenWordList {
-            contents: contents,
-            env: env.clone(),
-        })
+        return Ok(Frozen::WordList(
+            FrozenWordList {
+                contents: contents,
+                env: env.clone(),
+            })
+        ) 
     }
 
     fn to_identifier(&self, mes: &str) -> Result<String, String> {
@@ -227,7 +229,7 @@ pub enum WordType {
     Identifier(String),
     Bool,
     Null,
-    Frozen(FrozenWordList<WordType>),
+    Frozen(Box<Frozen<WordType>>),
     Operator(Box<OperatorSigs>),
     Function(Box<Signature>),
     ExitSignal,
@@ -260,11 +262,11 @@ impl WordKind<WordType> for WordType {
         return Self::Bool;
     }
 
-    fn vec_to_frozen(vec: Vec<Self>, env: &Env) -> Result<FrozenWordList<Self>, String> {
-        return Ok(FrozenWordList {
+    fn vec_to_frozen(vec: Vec<Self>, env: &Env) -> Result<Frozen<Self>, String> {
+        return Ok(Frozen::WordList(FrozenWordList {
             contents: vec,
             env: env.clone(),
-        })
+        }))
     }
 
     fn to_operator(&self, mes: &str) -> Result<Operator<WordType>, String> {
@@ -334,9 +336,9 @@ impl WordKind<WordType> for WordType {
         return w.get_type();
     }
 
-    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList<Self>, String> {
+    fn to_frozen(&self, mes: &str) -> Result<Frozen<Self>, String> {
         match self {
-            Self::Frozen(fwl) => Ok(fwl.clone()),
+            Self::Frozen(frozen) => Ok(*frozen.clone()),
             _ => Err(mes.to_string()),
         }
     }
@@ -490,7 +492,7 @@ impl Word {
             Self::Identifier(s) => s.to_string(),
             Self::Bool(b) => b.to_string(),
             Self::Null => "".to_string(),
-            Self::Frozen(fwl) => fwl.to_string(),
+            Self::Frozen(frozen) => frozen.to_string(),
             Self::Operator(op) => op.name(),
             Self::Function(f) => f.to_string(),
             Self::ExitSignal => "(ExitSignal)".to_string(),
@@ -612,6 +614,23 @@ pub enum Frozen<T> {
     FuncDef(FuncDef),
 }
 
+impl Frozen<Word> {
+    pub fn from_string(string: &String) -> Result<Self, String> {
+        return Self::from_tokenv(Token::tokenize(string)?, Env::Line);
+    }
+
+    pub fn from_tokenv(tv: Vec<Token>, env: Env) -> Result<Self, String> {
+        let mut wv = Vec::new();
+
+        for t in tv {
+            let w = Word::from_token(t);
+            wv.push(w);
+        }
+
+        return Word::vec_to_frozen(wv, &env);
+    }
+}
+
 #[derive(Clone, PartialEq)]
 pub struct FuncDef {
     pub name: Option<String>,
@@ -641,7 +660,7 @@ pub struct FrozenWordList<T> {
 }
 
 impl FrozenWordList<Word> {
-    fn find_frozenbound(wv: &Vec<Word>) -> Result<Option<(usize, usize)>, String> {
+    fn find_fwlbound(wv: &Vec<Word>) -> Result<Option<(usize, usize)>, String> {
         let mut i_bound: Option<(usize, usize)> = None;
 
         for (b, e) in FROZEN_BOUND {
@@ -658,21 +677,6 @@ impl FrozenWordList<Word> {
         }
 
         return Ok(i_bound);
-    }
-
-    pub fn from_tokenv(tv: Vec<Token>, env: Env) -> Result<Self, String> {
-        let mut wv = Vec::new();
-
-        for t in tv {
-            let w = Word::from_token(t);
-            wv.push(w);
-        }
-
-        return Word::vec_to_frozen(wv, &env);
-    }
-
-    pub fn from_string(string: &String) -> Result<Self, String> {
-        return Self::from_tokenv(Token::tokenize(string)?, Env::Line);
     }
 
     // Dummy function
