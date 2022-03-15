@@ -10,18 +10,24 @@ use std::fmt;
 
 pub const USER_TYPES: [WordType; 3] = [WordType::Bool, WordType::Set, WordType::Number];
 
-pub trait WordKind {
+pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn is_wordtype() -> bool;
     fn get_type(&self) -> WordType;
     fn null() -> Self;
     fn to_set(&self, mes: &str) -> Result<Set, String>;
     fn to_bool(&self, mes: &str) -> Result<bool, String>;
-    fn from_userf(uf: UserFunction<Self>) -> Self;
+    fn from_userf(uf: UserFunction<T>) -> Self;
     fn from_word(w: Word) -> Self;
-    fn to_func(&self, mes: &str) -> Result<Function<Self>, String>;
-    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList<Self>, String>;
+    fn to_func(&self, mes: &str) -> Result<Function<T>, String>;
+    fn to_frozen(&self, mes: &str) -> Result<FrozenWordList<T>, String>;
     fn to_operator(&self, mes: &str) -> Result<Operator, String>;
-    fn vec_to_frozen(vec: Vec<Self>, env: &Env) -> Result<FrozenWordList<Self>, String>;
+    fn vec_to_frozen(vec: Vec<T>, env: &Env) -> Result<FrozenWordList<T>, String>;
+    fn to_identifier(&self, mes: &str) -> Result<String, String>;
+    fn explode(&self, wordv: &Vec<T>) -> Vec<Vec<T>>;
+    fn find_word(wordv: &Vec<T>, word: Self) -> Option<usize>;
+    fn from_symbol(s: &'static str) -> Self;
+    fn from_keyword(s: &'static str) -> Self;
+    fn from_set(set: Set) -> Self;
 }
 
 #[derive(Clone, PartialEq)]
@@ -41,7 +47,36 @@ pub enum Word {
     PrintSignal(String),
 }
 
-impl WordKind for Word {
+impl WordKind<Word> for Word {
+    fn to_operator(&self, mes: &str) -> Result<Operator, String> {
+        match self {
+            Self::Operator(op) => Ok(*op),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn to_func(&self, mes: &str) -> Result<Function<Self>, String> {
+        match self {
+            Self::Function(f) => Ok(*f),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn to_bool(&self, mes: &str) -> Result<bool, String> {
+        match self {
+            Word::Bool(b) => Ok(*b),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn from_set(set: Set) -> Self {
+        return Word::Set(set);
+    }
+
+    fn from_keyword(s: &'static str) -> Self {
+        return Word::Keyword(s);
+    }
+
     fn is_wordtype() -> bool {
         return false;
     }
@@ -49,13 +84,13 @@ impl WordKind for Word {
     fn get_type(&self) -> WordType {
         match self {
             Word::Set(_) => WordType::Set,
-            Word::Keyword(_) => WordType::Keyword,
-            Word::Symbol(_) => WordType::Symbol,
-            Word::Identifier(_) => WordType::Identifier,
+            Word::Keyword(s) => WordType::Keyword(s),
+            Word::Symbol(s) => WordType::Symbol(s),
+            Word::Identifier(s) => WordType::Identifier(s.clone()),
             Word::Bool(_) => WordType::Bool,
             Word::Null => WordType::Null,
             Word::Frozen(fwl) => WordType::Frozen(fwl.to_wordtype()),
-            Word::Operator(_) => WordType::Operator,
+            Word::Operator(op) => WordType::Operator(op.clone()),
             Word::Function(f) => WordType::Function(&f.to_wordtype()),
             Word::ExitSignal => WordType::ExitSignal,
             Word::Type(_) => WordType::Type,
@@ -120,18 +155,52 @@ impl WordKind for Word {
             env: env.clone(),
         })
     }
+
+    fn to_identifier(&self, mes: &str) -> Result<String, String> {
+        match self {
+            Self::Identifier(s) => Ok(s.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn explode(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
+        let mut wv = wordv.clone();
+        let mut ret = Vec::new();
+
+        while let Some(i) = Self::find_word(&wv, self.clone()) {
+            let (wv1, wv2) = split_drop(&wv, i, i);
+            ret.push(wv1);
+            wv = wv2;
+        }
+        ret.push(wv);
+        
+        return ret;
+    }
+
+    fn find_word(wordv: &Vec<Word>, word: Word) -> Option<usize> {
+        for i in 0..wordv.len() {
+            if wordv[i] == word {
+                return Some(i);
+            }
+        }
+        return None;
+    }
+
+    fn from_symbol(s: &'static str) -> Self {
+        return Word::Symbol(s);
+    }
 }
 
 #[derive(Clone, PartialEq)]
 pub enum WordType {
     Set,
-    Keyword,
-    Symbol,
-    Identifier,
+    Keyword(&'static str),
+    Symbol(&'static str),
+    Identifier(String),
     Bool,
     Null,
     Frozen(FrozenWordList<WordType>),
-    Operator,
+    Operator(Operator),
     Function(&'static Function<WordType>),
     ExitSignal,
     Type,
@@ -139,7 +208,36 @@ pub enum WordType {
     PrintSginal,
 }
 
-impl WordKind for WordType {
+impl WordKind<WordType> for WordType {
+    fn vec_to_frozen(vec: Vec<Self>, env: &Env) -> Result<FrozenWordList<Self>, String> {
+        return Ok(FrozenWordList {
+            contents: vec,
+            env: env.clone(),
+        })
+    }
+
+    fn to_operator(&self, mes: &str) -> Result<Operator, String> {
+        match self {
+            Self::Operator(op) => Ok(*op),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn to_func(&self, mes: &str) -> Result<Function<Self>, String> {
+        match self {
+            Self::Function(f) => Ok(*f.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn from_set(_: Set) -> Self {
+        return Self::Set;
+    }
+
+    fn from_keyword(s: &'static str) -> Self {
+        return WordType::Keyword(s);
+    }
+
     fn is_wordtype() -> bool {
         return true;
     }
@@ -182,19 +280,53 @@ impl WordKind for WordType {
             _ => Err(mes.to_string()),
         }
     }
+
+    fn to_identifier(&self, mes: &str) -> Result<String, String> {
+        match self {
+            WordType::Identifier(s) => Ok(s.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn explode(&self, wordv: &Vec<Self>) -> Vec<Vec<Self>> {
+        let mut wv = wordv.clone();
+        let mut ret = Vec::new();
+
+        while let Some(i) = Self::find_word(&wv, self.clone()) {
+            let (wv1, wv2) = split_drop(&wv, i, i);
+            ret.push(wv1);
+            wv = wv2;
+        }
+        ret.push(wv);
+        
+        return ret;
+    }
+
+    fn find_word(wordv: &Vec<Self>, word: Self) -> Option<usize> {
+        for i in 0..wordv.len() {
+            if wordv[i] == word {
+                return Some(i);
+            }
+        }
+        return None;
+    }
+
+    fn from_symbol(s: &'static str) -> Self {
+        return WordType::Symbol(s);
+    }
 }
 
 impl fmt::Display for WordType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             WordType::Set => write!(f, "Set"),
-            WordType::Keyword => write!(f, "Keyword"),
-            WordType::Symbol => write!(f, "Symbol"),
-            WordType::Identifier => write!(f, "Identifier"),
+            WordType::Keyword(_) => write!(f, "Keyword"),
+            WordType::Symbol(_) => write!(f, "Symbol"),
+            WordType::Identifier(_) => write!(f, "Identifier"),
             WordType::Bool => write!(f, "Bool"),
             WordType::Null => write!(f, "Null"),
             WordType::Frozen(_) => write!(f, "Frozen"),
-            WordType::Operator => write!(f, "Operator"),
+            WordType::Operator(_) => write!(f, "Operator"),
             WordType::Function(_) => write!(f, "Function"),
             WordType::ExitSignal => write!(f, "ExitSignal"),
             WordType::Type => write!(f, "Type"),
@@ -256,13 +388,6 @@ impl Word {
         }
     }
     
-    pub fn to_bool(&self, mes: &str) -> Result<bool, String> {
-        match self {
-            Word::Bool(b) => Ok(*b),
-            _ => Err(mes.to_string()),
-        }
-    }
-
     pub fn to_operator(&self, mes: &str) -> Result<Operator, String> {
         match self {
             Word::Operator(op) => Ok(op.clone()),
@@ -282,29 +407,6 @@ impl Word {
             Word::Type(t) => Ok(t.clone()),
             _ => Err(mes.to_string()),
         }
-    }
-
-    pub fn find_word(wordv: &Vec<Word>, word: Word) -> Option<usize> {
-        for i in 0..wordv.len() {
-            if wordv[i] == word {
-                return Some(i);
-            }
-        }
-        return None;
-    }
-
-    pub fn explode(&self, wordv: &Vec<Word>) -> Vec<Vec<Word>> {
-        let mut wv = wordv.clone();
-        let mut ret = Vec::new();
-
-        while let Some(i) = Self::find_word(&wv, self.clone()) {
-            let (wv1, wv2) = split_drop(&wv, i, i);
-            ret.push(wv1);
-            wv = wv2;
-        }
-        ret.push(wv);
-        
-        return ret;
     }
 
     pub fn explode_each(&self, wordv: &Vec<Word>, s: &str) -> Result<Vec<Word>, String> {
@@ -963,7 +1065,7 @@ pub enum Function<T: Clone + PartialEq> {
     User(UserFunction<T>),
 }
 
-impl<T: Clone + PartialEq> Function<T> {
+impl<T: Clone + PartialEq + fmt::Display + WordKind<T>> Function<T> {
     pub fn to_string(&self) -> String {
         match self {
             Function::Preset(f) => f.to_string(),
@@ -979,7 +1081,7 @@ impl<T: Clone + PartialEq> Function<T> {
     }
 }
 
-impl<T: WordKind + Clone + PartialEq> Function<T> {
+impl<T: WordKind<T> + Clone + PartialEq + fmt::Display> Function<T> {
     pub fn type_check(&self, wv: Vec<T>) -> Result<(), String>{
         if wv.len() != self.sig().args.len() {
             return Err(format!("Function {}: Number of argument(s) mismatch. Expected {} argument(s), got {}.",
@@ -1109,11 +1211,11 @@ pub struct UserFunction<T: Clone + PartialEq> {
     name: Option<String>,
     sig: Signature,
     xv: Vec<String>,
-    expr: Vec<Word>,
+    expr: Vec<T>,
 }
 
-impl<T: Clone + PartialEq + WordKind> UserFunction<T> {
-    pub fn new(name: Option<String>, sig: Signature, xv: Vec<String>, expr: Vec<Word>) -> Self {
+impl<T: Clone + PartialEq + WordKind<T> + fmt::Display> UserFunction<T> {
+    pub fn new(name: Option<String>, sig: Signature, xv: Vec<String>, expr: Vec<T>) -> Self {
         return Self {name: name, sig: sig, xv: xv, expr: expr};
     }
 
@@ -1129,7 +1231,7 @@ impl<T: Clone + PartialEq + WordKind> UserFunction<T> {
         return self.sig.clone();
     }
 
-    pub fn get_expr(&self) -> Vec<Word> {
+    pub fn get_expr(&self) -> Vec<T> {
         return self.expr.clone();
     }
 
@@ -1153,7 +1255,7 @@ impl UserFunction<Word> {
             self.name.clone(),
             self.sig.clone(),
             self.xv.clone(),
-            self.expr.clone()
+            vec![self.sig.ret.clone()],
         )
     }
 }
