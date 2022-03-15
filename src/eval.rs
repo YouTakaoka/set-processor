@@ -167,7 +167,6 @@ fn parse_funcdef(identifier: Option<String>, wv: &Vec<Word>) -> Result<FuncDef, 
                 return Err("Syntax error in the return type part of function definition.".to_string());
             }
             let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
-            let sig = Signature::new(argst, rett);
 
             if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
                 // ここが中心部
@@ -417,15 +416,15 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     if let Some(i) = index {  // Operator見つかった
         let (mut wv1, mut wv2) = split_drop(&contents, i, i);
 
-        match contents[i].to_operator(&"Oops! Something is wrong.".to_string())? {
+        match contents[i].to_operator("Oops! Something is wrong.")? {
             Operator::BinaryOp(binop) => {
-                let t1 :T = wv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
+                let w1 :T = wv1.pop().ok_or("Parse error: Nothing before binary operator.".to_string())?;
                 if wv2.is_empty() {
                     return Err("Parse error: Nothing after binary operator.".to_string());
                 }
-                let t2 = wv2.remove(0);
-                let t_res = binop.apply(t1, t2)?;
-                wv1.push(t_res);
+                let w2 = wv2.remove(0);
+                let w_res = binop.apply(w1, w2)?;
+                wv1.push(w_res);
                 wv1.append(&mut wv2);
                 return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
             },
@@ -433,9 +432,9 @@ fn eval<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
                 if wv2.is_empty() {
                     return Err("Parse error: Nothing after binary operator.".to_string());
                 }
-                let t = wv2.remove(0);
-                let t_res = unop.apply(t)?;
-                wv1.push(t_res);
+                let w = wv2.remove(0);
+                let w_res = unop.apply(w)?;
+                wv1.push(w_res);
                 wv1.append(&mut wv2);
                 return eval(T::vec_to_frozen(wv1, &env)?, &bindm);
             },
