@@ -1,9 +1,12 @@
-print {{{}}, {}}
+def f: Set -> Set; s -> (let t={s} | t + s)
+print f({})
+
+%print {{{}}, {}}
 %hoge
 
-%let s = {}
-%print succ(succ(s)) % {{},{{}}}
-%print prev(succ(succ(s))) % {{}}
+%let t = {}
+%print succ(succ(t)) % {{},{{}}}
+%print prev(succ(succ(t))) % {{}}
 
 % いっこ前を得る関数(安全でない)
 def g: Set, Set -> Set; s, t -> if succ(s) == t then s else g(succ(s), t)

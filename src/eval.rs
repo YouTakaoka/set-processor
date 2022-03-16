@@ -98,30 +98,37 @@ fn set_from_fwl<T: Clone + WordKind<T> + PartialEq + fmt::Display>(fwl: FrozenWo
     return Ok(sl.uniquify());
 }
 
-fn find_fwl<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> Option<usize> {
+fn find_frozen<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -> Option<(usize, Frozen<T>)> {
     for i in 0..wv.len() {
-        if let Ok(Frozen::WordList(_)) = wv[i].to_frozen("") {
-            return Some(i);
+        if let Ok(frozen) = wv[i].to_frozen("") {
+            return Some((i, frozen));
         }
     }
 
     return None;
 }
 
-fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: Function<T>, fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<T, String> {
-    if !fwl.env_is(Env::Bracket) {
-        panic!("Token '(' must follow just after a function.");
+fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>
+    (f: Function<T>, frozen: Frozen<T>, bm: &Bind<T>) -> Result<T, String> {
+
+    let contents;
+    if let Frozen::Bracket(wvv) = frozen {
+        if wvv.len() > 1 {
+            panic!("Too many word vectors found in function call. Something is wrong.");
+        }
+        contents = wvv.get(0).unwrap().clone();
+    } else {
+        panic!("Token '(' must follow just after a function, found {}.", frozen.to_string());
     }
 
     let mut wv = Vec::new();
-    let contents = fwl.get_contents();
     for wv1 in T::from_symbol(",").explode(&contents) {
         let frozen = T::vec_to_frozen(wv1, &Env::Line)?;
         let (word1, _) = eval(frozen, bm)?;
         wv.push(word1);
     }
 
-    if fwl.is_empty() {
+    if contents.is_empty() {
         wv = vec![];
     }
 
@@ -220,6 +227,11 @@ fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>
 
 fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     (fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
+
+    if fwl.is_empty() {
+        return Ok((T::null(), bm.clone()));
+    }
+
     let env = fwl.get_env();
     let mut bindm = bm.clone();
 
@@ -241,13 +253,15 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     for i in 0..contents.len() {
         if let Ok(f) = contents[i].to_func("") {
             if let Some(w) = contents.get(i+1) {
-                if let Ok(Frozen::WordList(fwl1)) = w.to_frozen("") {
-                    if fwl1.env_is(Env::Bracket) {
-                        let word = apply_function(f.clone(), fwl1.clone(), &bindm)?;
-                        let contents_new = subst_range(&contents, i, i + 1, word);
-                        if let Frozen::WordList(fwl_new) = T::vec_to_frozen(contents_new, &env)? {
-                            return eval_fwl(fwl_new, &bindm);
-                        }
+                if let Ok(Frozen::Bracket(wvv)) = w.to_frozen("") {
+                    if wvv.len() > 1 {
+                        return Err("Syntax error: Symbol '|' cannot be used in function call.".to_string());
+                    }
+                    let frozen = Frozen::Bracket(wvv.clone());
+                    let word = apply_function(f.clone(), frozen.clone(), &bindm)?;
+                    let contents_new = subst_range(&contents, i, i + 1, word);
+                    if let Frozen::WordList(fwl_new) = T::vec_to_frozen(contents_new, &env)? {
+                        return eval_fwl(fwl_new, &bindm);
                     }
                 }
             }
@@ -255,27 +269,32 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     }
 
     // 括弧処理
-    while let Some(i) = find_fwl(&contents) {
-        match contents[i].to_frozen("") {
-            Ok(Frozen::WordList(fwl1)) => {
-                match fwl1.get_env() {
-                    Env::Scope => {
-                        let (word, _) = eval_fwl(fwl1, &bindm)?;
-                        contents[i] = word;
-                    },
-                    Env::Bracket => {
-                        let (word, bindm1) = eval_fwl(fwl1, &bindm)?;
-                        contents[i] = word;
-                        bindm = bindm1;
-                    },
-                    Env::Set => { // Setの場合
-                        let set = set_from_fwl(fwl1, &bindm)?;
-                        contents[i] = T::from_set(set);
-                    },
-                    _ => panic!("Env error. Env {} in {}.", fwl1.get_env(), fwl.get_env()),
+    while let Some((i, frozen)) = find_frozen(&contents) {
+        match frozen {
+            Frozen::Scope(wvv) => {
+                let mut fv = Vec::new();
+                for wv in wvv {
+                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
+                }
+                let (word, _) = eval_scope(&fv, &bindm)?;
+                contents[i] = word;
+            },
+            Frozen::Bracket(wvv) => {
+                let mut fv = Vec::new();
+                for wv in wvv {
+                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
+                }
+                let (word, bindm1) = eval_scope(&fv, &bindm)?;
+                contents[i] = word;
+                bindm = bindm1;
+            },
+            Frozen::WordList(fwl) => {
+                if fwl.env_is(Env::Set) { // Setの場合
+                    let set = set_from_fwl(fwl, &bindm)?;
+                    contents[i] = T::from_set(set);
                 }
             },
-            _ => panic!("eval: PresetFunction find_fwl() brought index of non-FrozenWordList"),
+            _ => panic!("Error: Invalid kind of frozen: {}.", frozen.to_string()),
         }
     }
 
@@ -342,7 +361,7 @@ pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
 
     match frozen {
         Frozen::WordList(fwl) => return eval_fwl(fwl, bindm),
-        Frozen::Scope(wvv) => {
+        Frozen::Scope(wvv) | Frozen::Bracket(wvv) => {
             let mut frozenv = Vec::new();
             for wv in wvv {
                 frozenv.push(T::vec_to_frozen(wv, &Env::Line)?);
@@ -464,6 +483,8 @@ pub fn eval_main(string: &String) -> Result<(), String> {
             }
         }
     }
+    // 最後にここが必要
+    tvv.push(prev_tv);
 
     let mut frozenv: Vec<Frozen<Word>> = Vec::new();
     for tv in tvv {
