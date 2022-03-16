@@ -625,6 +625,7 @@ pub enum Frozen<T> {
     Scope(Vec<Vec<T>>),
     LetExpr(LetExpr<T>),
     FuncDef(FuncDef<T>),
+    Bracket(Vec<Vec<T>>),
 }
 
 impl<T: Clone + PartialEq + fmt::Display> Frozen<T> {
@@ -635,6 +636,7 @@ impl<T: Clone + PartialEq + fmt::Display> Frozen<T> {
             Self::IfExpr(_) => "(if-expr)".to_string(),
             Self::LetExpr(_) => "(let-expr)".to_string(),
             Self::Scope(_) => "(scope)".to_string(),
+            Self::Bracket(_) => "(bracket)".to_string(),
         }
     }
 }
@@ -667,6 +669,13 @@ impl Frozen<Word> {
                     wtvv.push(Word::vec_to_type(wv));
                 }
                 return Frozen::Scope(wtvv);
+            },
+            Self::Bracket(wvv) => {
+                let mut wtvv = Vec::new();
+                for wv in wvv {
+                    wtvv.push(Word::vec_to_type(wv));
+                }
+                return Frozen::Bracket(wtvv);
             },
         }
     }
@@ -805,7 +814,11 @@ impl FrozenWordList<Word> {
     pub fn to_frozen(&self) -> Result<Frozen<Word>, String> {
         let env = self.get_env().clone();
         match env {
-            Env::Line | Env::Set | Env::Bracket => (),
+            Env::Line | Env::Set => (),
+            Env::Bracket => {
+                let wvv = Word::Symbol("|").explode(&self.get_contents());
+                return Ok(Frozen::Bracket(wvv))
+            },
             Env::Scope => {
                 let wvv = Word::Symbol("|").explode(&self.get_contents());
                 return Ok(Frozen::Scope(wvv))
