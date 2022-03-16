@@ -111,17 +111,6 @@ fn find_frozen<T: WordKind<T> + Clone + fmt::Display + PartialEq>(wv: &Vec<T>) -
 fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>
     (f: Function<T>, frozen: Frozen<T>, bm: &Bind<T>) -> Result<T, String> {
 
-    /* let fwl;
-    if let Frozen::WordList(fwl1) = frozen {
-        fwl = fwl1;
-    } else {
-        panic!("Token '(' must follow just after a function, found {}.", frozen.to_string());
-    }
-    
-    if !fwl.env_is(Env::Bracket) {
-        panic!("Token '(' must follow just after a function.");
-    } */
-
     let contents;
     if let Frozen::Bracket(wvv) = frozen {
         if wvv.len() > 1 {
@@ -133,7 +122,6 @@ fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>
     }
 
     let mut wv = Vec::new();
-    //let contents = fwl.get_contents();
     for wv1 in T::from_symbol(",").explode(&contents) {
         let frozen = T::vec_to_frozen(wv1, &Env::Line)?;
         let (word1, _) = eval(frozen, bm)?;
@@ -495,6 +483,8 @@ pub fn eval_main(string: &String) -> Result<(), String> {
             }
         }
     }
+    // 最後にここが必要
+    tvv.push(prev_tv);
 
     let mut frozenv: Vec<Frozen<Word>> = Vec::new();
     for tv in tvv {
