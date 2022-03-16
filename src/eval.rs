@@ -160,7 +160,7 @@ fn apply_user<T: Clone + WordKind<T> + PartialEq + fmt::Display>(f: UserFunction
 fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
     (fv_def: &Vec<Frozen<T>>, bindm: &Bind<T>) -> Result<(), String> {
 
-    let mut bm = bindm.clone();
+    let mut bm = bindm.func_only();
     for frozen in fv_def {
         let (_, bm1) = eval(frozen.clone(), &bm)?;
         bm = bm1;
@@ -168,6 +168,17 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
 
     for frozen in fv_def {
         if let Frozen::FuncDef(fd) = frozen {
+            if fd.argv.len() != fd.argtv.len() {
+                return Err(format!(
+                    "Error: Number of arguments in type definition ({}) and main part ({}) of function definition doesn't match.",
+                    fd.argtv.len(),
+                    fd.argv.len()
+                ));
+            }
+            for (xt, x) in fd.argtv.iter().zip(&fd.argv) {
+                bm.insert(x.clone(), T::from_wordtype(xt.clone()));
+            }
+
             let expr = fd.expr.clone();
             let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm)?;
             let wt = w.get_type();
@@ -181,7 +192,7 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
             }
         }
     }
-    return Ok(()); //todo
+    return Ok(());
 }
 
 fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>
@@ -428,10 +439,18 @@ pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
 
 pub fn eval_line(s: &String, bindm: &Bind<Word>) -> Result<(Word, Bind<Word>), String> {
     let frozen = Frozen::from_string(s)?;
-    if let Frozen::FuncDef(_) = frozen {
-        return_type_check(&vec![frozen.clone()], bindm)?;
+
+    let bmt = bindm.to_typebind();
+
+    if let Frozen::FuncDef(_) = frozen.clone() {
+        // 単にreturn type checkをするため
+        compile_defs(&vec![frozen.to_wordtype()], &bmt)?;
+    } else {
+        // 型チェック
+        eval(frozen.to_wordtype(), &bmt)?;
     }
-    return eval(frozen, bindm);
+
+    return eval(frozen, &bindm);
 }
 
 pub fn is_in<T: PartialEq>(x: T, vec: Vec<T>) -> bool {
@@ -487,25 +506,27 @@ pub fn eval_main(string: &String) -> Result<(), String> {
     tvv.push(prev_tv);
 
     let mut frozenv: Vec<Frozen<Word>> = Vec::new();
+    let mut ftv: Vec<Frozen<WordType>> = Vec::new();
     for tv in tvv {
         let frozen = Frozen::from_tokenv(tv, Env::Line)?;
+        ftv.push(frozen.to_wordtype());
         frozenv.push(frozen);
     }
 
-    let (frozenv_other, bindm) = compile_defs(&frozenv, &Bind::new())?;
+    // Return type checkを実施するため2回走らせる
+    let (ftv_other, mut bmt) = compile_defs(&ftv, &Bind::new())?;
+    let (frozenv_other, mut bindm) = compile_defs(&frozenv, &Bind::new())?;
 
     // 型チェック
-    let mut bmt = bindm.to_typebind();
-    for frozen in frozenv_other.clone() {
-        let (_, bmt1) = eval(frozen.to_wordtype(), &bmt)?;
+    for frozen in ftv_other {
+        let (_, bmt1) = eval(frozen, &bmt)?;
         bmt = bmt1;
     }
 
     // 実行部分
-    let mut bm = bindm.clone();
     for frozen in frozenv_other {
-        let (w1, bm1) = eval(frozen, &bm)?;
-        bm = bm1;
+        let (w1, bm1) = eval(frozen, &bindm)?;
+        bindm = bm1;
         match w1 {
             Word::PrintSignal(s) => println!("{}", s),
             Word::ExitSignal => break,

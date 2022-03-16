@@ -22,8 +22,10 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn to_frozen(&self, mes: &str) -> Result<Frozen<T>, String>;
     fn to_operator(&self, mes: &str) -> Result<Operator<T>, String>;
     fn to_number(&self, mes: &str) -> Result<usize, String>;
+    fn to_keyword(&self, mes: &str) -> Result<&'static str, String>;
     fn vec_to_frozen(vec: Vec<T>, env: &Env) -> Result<Frozen<T>, String>;
     fn to_identifier(&self, mes: &str) -> Result<String, String>;
+    fn to_type(&self, mes: &str) -> Result<WordType, String>;
     fn explode(&self, wordv: &Vec<T>) -> Vec<Vec<T>>;
     fn find_word(wordv: &Vec<T>, word: Self) -> Option<usize>;
     fn from_symbol(s: &'static str) -> Self;
@@ -34,6 +36,7 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn from_printsignal(s: String) -> Self;
     fn from_wordtype(wt: WordType) -> Self;
     fn from_function(f: Function<T>) -> Self;
+    fn find_bracket(wordv: &Vec<T>, tb: Self, te: Self) -> Result<Option<(usize, usize)>, String>;
 }
 
 #[derive(Clone, PartialEq)]
@@ -53,7 +56,65 @@ pub enum Word {
     PrintSignal(String),
 }
 
+fn find<T: PartialEq>(elemv: &Vec<T>, elem: T) -> Option<usize> {
+    for i in 0..elemv.len() {
+        if elemv[i] == elem {
+            return Some(i);
+        }
+    }
+    return None;
+}
+
+pub fn split<T: Clone + PartialEq>(d: T, vec: &Vec<T>) -> Option<(Vec<T>, Vec<T>)> {
+    if let Some(i) = find(vec, d) {
+        let (vec1, vec2) = split_drop(vec, i, i);
+        return Some((vec1, vec2));
+    }
+    return None;
+}
+
 impl WordKind<Word> for Word {
+    fn to_type(&self, mes: &str) -> Result<WordType, String> {
+        match self {
+            Word::Type(t) => Ok(t.clone()),
+            _ => Err(mes.to_string()),
+        }
+    }
+
+    fn find_bracket(wordv: &Vec<Word>, tb: Word, te: Word) -> Result<Option<(usize, usize)>, String> {
+        let mut ib: Option<usize> = None;
+        let mut cnt = 0;
+
+        for i in 0..wordv.len() {
+            if wordv[i] == te {
+                if cnt < 1 {
+                    return Err("Bracket is not closed.".to_string());
+                } else if cnt == 1 {
+                    return Ok(Some((ib.unwrap(), i)));
+                }
+                cnt -= 1;
+            } else if wordv[i] == tb {
+                if cnt == 0 {
+                    ib = Some(i);
+                }
+                cnt += 1;
+            }
+        }
+
+        if let None = ib {
+            return Ok(None);
+        }
+        
+        return Err("Bracket is not closed.".to_string());
+    }
+
+    fn to_keyword(&self, mes: &str) -> Result<&'static str, String> {
+        match self {
+            Self::Keyword(kw) => Ok(kw),
+            _ => Err(mes.to_string()),
+        }
+    }
+
     fn from_function(f: Function<Self>) -> Self {
         return Self::Function(f);
     }
@@ -244,6 +305,44 @@ pub enum WordType {
 }
 
 impl WordKind<WordType> for WordType {
+    fn to_type(&self, _: &str) -> Result<WordType, String> {
+        return Ok(self.clone());
+    }
+
+    fn find_bracket(wordv: &Vec<WordType>, tb: WordType, te: WordType) -> Result<Option<(usize, usize)>, String> {
+        let mut ib: Option<usize> = None;
+        let mut cnt = 0;
+
+        for i in 0..wordv.len() {
+            if wordv[i] == te {
+                if cnt < 1 {
+                    return Err("Bracket is not closed.".to_string());
+                } else if cnt == 1 {
+                    return Ok(Some((ib.unwrap(), i)));
+                }
+                cnt -= 1;
+            } else if wordv[i] == tb {
+                if cnt == 0 {
+                    ib = Some(i);
+                }
+                cnt += 1;
+            }
+        }
+
+        if let None = ib {
+            return Ok(None);
+        }
+        
+        return Err("Bracket is not closed.".to_string());
+    }
+
+    fn to_keyword(&self, mes: &str) -> Result<&'static str, String> {
+        match self {
+            Self::Keyword(kw) => Ok(kw),
+            _ => Err(mes.to_string()),
+        }
+    }
+
     fn from_function(f: Function<Self>) -> Self {
         return Self::Function(Box::new(f.sig()));
     }
@@ -272,10 +371,10 @@ impl WordKind<WordType> for WordType {
     }
 
     fn vec_to_frozen(vec: Vec<Self>, env: &Env) -> Result<Frozen<Self>, String> {
-        return Ok(Frozen::WordList(FrozenWordList {
+        return Ok(FrozenWordList {
             contents: vec,
             env: env.clone(),
-        }))
+        }.to_frozen()?)
     }
 
     fn to_operator(&self, mes: &str) -> Result<Operator<WordType>, String> {
@@ -470,33 +569,6 @@ impl Word {
         }
     }
 
-    pub fn to_type(&self, mes: &str) -> Result<WordType, String> {
-        match self {
-            Word::Type(t) => Ok(t.clone()),
-            _ => Err(mes.to_string()),
-        }
-    }
-
-    pub fn explode_each(&self, wordv: &Vec<Word>, s: &str) -> Result<Vec<Word>, String> {
-        let mut ret = Vec::new();
-        for wv in self.explode(wordv) {
-            if wv.len() != 1 {
-                return Err(s.to_string());
-            }
-            ret.push(wv[0].clone());
-        }
-
-        return Ok(ret);
-    }
-
-    pub fn split(&self, wv: &Vec<Word>) -> Option<(Vec<Word>, Vec<Word>)> {
-        if let Some(i) = Word::find_word(wv, self.clone()) {
-            let (wv1, wv2) = split_drop(wv, i, i);
-            return Some((wv1, wv2));
-        }
-        return None;
-    }
-
     pub fn to_string(self: &Self) -> String {
         match self {
             Self::Set(set) => set.to_string(),
@@ -526,33 +598,32 @@ impl Word {
         s = format!("[{}]", s);
         return s;
     }
+}
 
-    pub fn find_bracket(wordv: &Vec<Word>, tb: Word, te: Word) -> Result<Option<(usize, usize)>, String> {
-        let mut ib: Option<usize> = None;
-        let mut cnt = 0;
+fn explode<T: PartialEq + Clone>(elem: T, vec: &Vec<T>) -> Vec<Vec<T>> {
+    let mut v = vec.clone();
+    let mut ret = Vec::new();
 
-        for i in 0..wordv.len() {
-            if wordv[i] == te {
-                if cnt < 1 {
-                    return Err("Bracket is not closed.".to_string());
-                } else if cnt == 1 {
-                    return Ok(Some((ib.unwrap(), i)));
-                }
-                cnt -= 1;
-            } else if wordv[i] == tb {
-                if cnt == 0 {
-                    ib = Some(i);
-                }
-                cnt += 1;
-            }
-        }
-
-        if let None = ib {
-            return Ok(None);
-        }
-        
-        return Err("Bracket is not closed.".to_string());
+    while let Some(i) = find(&v, elem.clone()) {
+        let (v1, v2) = split_drop(&v, i, i);
+        ret.push(v1);
+        v = v2;
     }
+    ret.push(v);
+    
+    return ret;
+}
+
+pub fn explode_each<T: PartialEq + Clone>(elem: T, vec: &Vec<T>, s: &str) -> Result<Vec<T>, String> {
+    let mut ret = Vec::new();
+    for v in explode(elem, vec) {
+        if v.len() != 1 {
+            return Err(s.to_string());
+        }
+        ret.push(v[0].clone());
+    }
+
+    return Ok(ret);
 }
 
 pub fn split_drop<T: Clone>(wordv: &Vec<T>, i1: usize, i2: usize) -> (Vec<T>, Vec<T>) {
@@ -802,33 +873,29 @@ impl<T: Clone + PartialEq + std::fmt::Display> FrozenWordList<T> {
     }
 }
 
-impl FrozenWordList<Word> {
-    pub fn to_wordtype(&self) -> FrozenWordList<WordType> {
-        let contents = Word::vec_to_type(&self.get_contents());
-        return FrozenWordList {
-            contents: contents,
-            env: self.get_env(),
-        }
-    }
-
-    pub fn to_frozen(&self) -> Result<Frozen<Word>, String> {
+impl<T: Clone + PartialEq + fmt::Display + WordKind<T>> FrozenWordList<T> {
+    pub fn to_frozen(&self) -> Result<Frozen<T>, String> {
         let env = self.get_env().clone();
         match env {
             Env::Line | Env::Set => (),
             Env::Bracket => {
-                let wvv = Word::Symbol("|").explode(&self.get_contents());
+                let wvv = T::from_symbol("|").explode(&self.get_contents());
                 return Ok(Frozen::Bracket(wvv))
             },
             Env::Scope => {
-                let wvv = Word::Symbol("|").explode(&self.get_contents());
+                let wvv = T::from_symbol("|").explode(&self.get_contents());
                 return Ok(Frozen::Scope(wvv))
             },
             _ => panic!("Invalid Env type {} in eval() function.", env),
         }
 
         let keyword;
-        if let Some(Word::Keyword(kw)) = self.get(0) {
-            keyword = kw;
+        if let Some(w) = self.get(0) {
+            if let Ok(kw) = w.to_keyword("") {
+                keyword = kw;
+            } else {
+                return Ok(Frozen::WordList(self.clone()));
+            }
         } else {
             return Ok(Frozen::WordList(self.clone()));
         }
@@ -839,9 +906,9 @@ impl FrozenWordList<Word> {
                 return Err("Parse error: 'let' statement is too short.".to_string());
             }
     
-            if let Some(Word::Symbol("=")) = self.get(2) {
+            if self.get(2).unwrap() == T::from_symbol("=") {
                 let word1 = self.get(1).unwrap();
-                if let Word::Identifier(identifier) = &word1 {
+                if let Ok(identifier) = word1.to_identifier("") {
                     // ここが中心部
                     let mut wordv = self.get_contents();
                     let expr = wordv.split_off(3);
@@ -859,13 +926,25 @@ impl FrozenWordList<Word> {
         // if文の処理
         if keyword == "if" {
             // then節を探す(なければerror)
-            let option_then = rewrite_error(Word::find_bracket(&self.get_contents(), Word::Keyword("if"), Word::Keyword("then")),
-                                            "Syntax error: Keyword 'then' not found after 'if' keyword.".to_string())?;
+            let option_then = rewrite_error(
+                T::find_bracket(
+                    &self.get_contents(),
+                    T::from_keyword("if"),
+                    T::from_keyword("then")
+                ),
+                "Syntax error: Keyword 'then' not found after 'if' keyword.".to_string()
+            )?;
             let (_, i_then) = option_then.unwrap();
     
             // else節を探す(なければerror)
-            let option_else = rewrite_error(Word::find_bracket(&self.get_contents(), Word::Keyword("if"), Word::Keyword("else")),
-                                            "Syntax error: Keyword 'else' not found after 'if' keyword.".to_string())?;
+            let option_else = rewrite_error(
+                T::find_bracket(
+                    &self.get_contents(),
+                    T::from_keyword("if"),
+                    T::from_keyword("else")
+                ),
+                "Syntax error: Keyword 'else' not found after 'if' keyword.".to_string()
+            )?;
             let (_, i_else) = option_else.unwrap();
     
             // thenがelseより後ろならerror
@@ -883,14 +962,14 @@ impl FrozenWordList<Word> {
         }
     
         // def(関数定義)文の処理
-        if let Some(Word::Keyword("def")) = self.get(0) {
-            if self.get(2) != Some(Word::Symbol(":")) {
+        if keyword == "def" {
+            if self.get(2) != Some(T::from_symbol(":")) {
                 return Err("Syntax error: Token ':' needed after 'def' token.".to_string());
             } else if self.get(2) == None {
                 return Err("Parse error: 'def' statement is too short.".to_string());
             }
     
-            if let Some(Word::Identifier(identifier)) = self.get(1) {
+            if let Ok(identifier) = self.get(1).unwrap().to_identifier("") {
                 // ここが中心部
                 let (_, wv1) = split_drop(&self.get_contents(), 2, 2);
                 let f = parse_funcdef(Some(identifier.clone()), &wv1)?;
@@ -905,6 +984,16 @@ impl FrozenWordList<Word> {
     }
 }
 
+impl FrozenWordList<Word> {
+    pub fn to_wordtype(&self) -> FrozenWordList<WordType> {
+        let contents = Word::vec_to_type(&self.get_contents());
+        return FrozenWordList {
+            contents: contents,
+            env: self.get_env(),
+        }
+    }
+}
+
 fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, String> {
     match result {
         Ok(val) => Ok(val),
@@ -912,36 +1001,45 @@ fn rewrite_error<T>(result: Result<T, String>, string: String) -> Result<T, Stri
     }
 }
 
-fn parse_funcdef(identifier: Option<String>, wv: &Vec<Word>) -> Result<FuncDef<Word>, String> {
-    if let Some((wv_types, wv_other)) = Word::Symbol(";").split(wv) {
-        if let Some((wv_argst, wv_rett)) = Word::Symbol("->").split(&wv_types) {
+fn parse_funcdef<T: WordKind<T> + Clone + fmt::Display + PartialEq>
+    (identifier: Option<String>, wv: &Vec<T>) -> Result<FuncDef<T>, String> {
+
+    if let Some((wv_types, wv_other)) = split(T::from_symbol(";"), wv) {
+        if let Some((wv_argst, wv_rett)) = split(T::from_symbol("->"), &wv_types) {
             // 返り値のSignatureをつくる
             let mut argst = Vec::new();
-            for w in Word::Symbol(",").explode_each(&wv_argst, "Syntax error in the argument type part of function definition.")? {
-                let t = w.to_type("Type error: Type name expected.")?;
-                argst.push(t);
-            }
+            for w in explode_each(
+                    T::from_symbol(","),
+                    &wv_argst,
+                    "Syntax error in the argument type part of function definition."
+                )? {
+                    let t = w.to_type("Type error: Type name expected.")?;
+                    argst.push(t);
+                }
 
             if wv_rett.len() != 1 {
                 return Err("Syntax error in the return type part of function definition.".to_string());
             }
             let rett = wv_rett[0].to_type("Type error: Type name expected.")?;
 
-            if let Some((wv_args, wv_ret)) = Word::Symbol("->").split(&wv_other) {
+            if let Some((wv_args, wv_ret)) = split(T::from_symbol("->"), &wv_other) {
                 // ここが中心部
                 let mut args = Vec::new();
-                for w in Word::Symbol(",").explode_each(&wv_args, "Syntax error in the arguments part of function definition.")? {
-                    if let Word::Identifier(id) = w {
-                        if Some(id.clone()) == identifier {
-                            return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
-                                                identifier.unwrap()));
+                for w in explode_each(T::from_symbol(","),
+                        &wv_args,
+                        "Syntax error in the arguments part of function definition."
+                    )? {
+                        if let Ok(id) = w.to_identifier("") {
+                            if Some(id.clone()) == identifier {
+                                return Err(format!("Name error: PresetFunction name '{}' cannot used in arguments.",
+                                                    identifier.unwrap()));
+                            }
+                            args.push(id);
+                        } else {
+                            return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
                         }
-                        args.push(id);
-                    } else {
-                        return Err(format!("Name error: Token '{}' cannot used in arguments.", w));
-                    }
                 }
-                let fdef = FuncDef{
+                let fdef: FuncDef<T> = FuncDef {
                     name: identifier,
                     argtv: argst,
                     rett: rett,
