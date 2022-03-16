@@ -631,7 +631,10 @@ impl<T: Clone + PartialEq + fmt::Display> Frozen<T> {
     pub fn to_string(&self) -> String {
         match self {
             Self::WordList(fwl) => fwl.to_string(),
-            _ => "(frozen)".to_string(),
+            Self::FuncDef(_) => "(funcdef)".to_string(),
+            Self::IfExpr(_) => "(if-expr)".to_string(),
+            Self::LetExpr(_) => "(let-expr)".to_string(),
+            Self::Scope(_) => "(scope)".to_string(),
         }
     }
 }
@@ -802,8 +805,8 @@ impl FrozenWordList<Word> {
     pub fn to_frozen(&self) -> Result<Frozen<Word>, String> {
         let env = self.get_env().clone();
         match env {
-            Env::Line | Env::Set => (),
-            Env::Scope | Env::Bracket => {
+            Env::Line | Env::Set | Env::Bracket => (),
+            Env::Scope => {
                 let wvv = Word::Symbol("|").explode(&self.get_contents());
                 return Ok(Frozen::Scope(wvv))
             },

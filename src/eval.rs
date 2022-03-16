@@ -220,6 +220,11 @@ fn eval_scope<T: Clone + WordKind<T> + PartialEq + fmt::Display>
 
 fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     (fwl: FrozenWordList<T>, bm: &Bind<T>) -> Result<(T, Bind<T>), String> {
+
+    if fwl.is_empty() {
+        return Ok((T::null(), bm.clone()));
+    }
+
     let env = fwl.get_env();
     let mut bindm = bm.clone();
 
