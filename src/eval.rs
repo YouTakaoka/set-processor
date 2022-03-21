@@ -175,12 +175,14 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
                     fd.argv.len()
                 ));
             }
+
+            let mut bm1 = bm.clone();
             for (xt, x) in fd.argtv.iter().zip(&fd.argv) {
-                bm.insert(x.clone(), T::from_wordtype(xt.clone()));
+                bm1.insert(x.clone(), T::from_wordtype(xt.clone()));
             }
 
             let expr = fd.expr.clone();
-            let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm)?;
+            let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm1)?;
             let wt = w.get_type();
             if wt != fd.rett {
                 return Err(format!(
