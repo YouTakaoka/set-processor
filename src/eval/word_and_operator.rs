@@ -693,10 +693,10 @@ impl fmt::Display for Env {
 pub enum Frozen<T> {
     WordList(FrozenWordList<T>),
     IfExpr(IfExpr<T>),
-    Scope(Vec<Vec<T>>),
+    Scope(Vec<Frozen<T>>),
     LetExpr(LetExpr<T>),
     FuncDef(FuncDef<T>),
-    Bracket(Vec<Vec<T>>),
+    Bracket(Vec<Frozen<T>>),
 }
 
 impl<T: Clone + PartialEq + fmt::Display> Frozen<T> {
@@ -734,19 +734,19 @@ impl Frozen<Word> {
             Self::FuncDef(fd) => Frozen::FuncDef(fd.to_wordtype()),
             Self::LetExpr(le) => Frozen::LetExpr(le.to_wordtype()),
             Self::IfExpr(ie) => Frozen::IfExpr(ie.to_wordtype()),
-            Self::Scope(wvv) => {
-                let mut wtvv = Vec::new();
-                for wv in wvv {
-                    wtvv.push(Word::vec_to_type(wv));
+            Self::Scope(fv) => {
+                let mut ftv = Vec::new();
+                for frozen in fv {
+                    ftv.push(frozen.to_wordtype());
                 }
-                return Frozen::Scope(wtvv);
+                return Frozen::Scope(ftv);
             },
-            Self::Bracket(wvv) => {
-                let mut wtvv = Vec::new();
-                for wv in wvv {
-                    wtvv.push(Word::vec_to_type(wv));
+            Self::Bracket(fv) => {
+                let mut ftv = Vec::new();
+                for frozen in fv {
+                    ftv.push(frozen.to_wordtype());
                 }
-                return Frozen::Bracket(wtvv);
+                return Frozen::Bracket(ftv);
             },
         }
     }
@@ -880,11 +880,19 @@ impl<T: Clone + PartialEq + fmt::Display + WordKind<T>> FrozenWordList<T> {
             Env::Line | Env::Set => (),
             Env::Bracket => {
                 let wvv = T::from_symbol("|").explode(&self.get_contents());
-                return Ok(Frozen::Bracket(wvv))
+                let mut fv = Vec::new();
+                for wv in wvv {
+                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
+                }
+                return Ok(Frozen::Bracket(fv))
             },
             Env::Scope => {
                 let wvv = T::from_symbol("|").explode(&self.get_contents());
-                return Ok(Frozen::Scope(wvv))
+                let mut fv = Vec::new();
+                for wv in wvv {
+                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
+                }
+                return Ok(Frozen::Scope(fv))
             },
             _ => panic!("Invalid Env type {} in eval() function.", env),
         }

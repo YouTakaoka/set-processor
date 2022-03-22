@@ -112,11 +112,21 @@ fn apply_function<T: Clone + WordKind<T> + PartialEq + fmt::Display>
     (f: Function<T>, frozen: Frozen<T>, bm: &Bind<T>) -> Result<T, String> {
 
     let contents;
-    if let Frozen::Bracket(wvv) = frozen {
-        if wvv.len() > 1 {
+    if let Frozen::Bracket(fv) = frozen {
+        if fv.len() > 1 {
             panic!("Too many word vectors found in function call. Something is wrong.");
         }
-        contents = wvv.get(0).unwrap().clone();
+
+        let frozen1 = fv.get(0).unwrap().clone();
+        match frozen1.clone() {
+            Frozen::WordList(fwl) => contents = fwl.get_contents(),
+            Frozen::IfExpr(_) | Frozen::Bracket(_) | Frozen::Scope(_) => {
+                let (w, _) = eval(frozen1, bm)?;
+                contents = vec![w]
+            },
+            Frozen::LetExpr(_) => return Err("Syntax error: 'let' statement cannot be used in a function call.".to_string()),
+            Frozen::FuncDef(_) => return Err("Syntax error: 'def' statement cannot be used in a function call.".to_string()),
+        }
     } else {
         panic!("Token '(' must follow just after a function, found {}.", frozen.to_string());
     }
@@ -298,19 +308,11 @@ fn eval_fwl<T: Clone + WordKind<T> + PartialEq + std::fmt::Display>
     // 括弧処理
     while let Some((i, frozen)) = find_frozen(&contents) {
         match frozen {
-            Frozen::Scope(wvv) => {
-                let mut fv = Vec::new();
-                for wv in wvv {
-                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
-                }
+            Frozen::Scope(fv) => {
                 let (word, _) = eval_scope(&fv, &bindm)?;
                 contents[i] = word;
             },
-            Frozen::Bracket(wvv) => {
-                let mut fv = Vec::new();
-                for wv in wvv {
-                    fv.push(T::vec_to_frozen(wv, &Env::Line)?);
-                }
+            Frozen::Bracket(fv) => {
                 let (word, bindm1) = eval_scope(&fv, &bindm)?;
                 contents[i] = word;
                 bindm = bindm1;
@@ -388,13 +390,7 @@ pub fn eval<T: Clone + PartialEq + WordKind<T> + fmt::Display>
 
     match frozen {
         Frozen::WordList(fwl) => return eval_fwl(fwl, bindm),
-        Frozen::Scope(wvv) | Frozen::Bracket(wvv) => {
-            let mut frozenv = Vec::new();
-            for wv in wvv {
-                frozenv.push(T::vec_to_frozen(wv, &Env::Line)?);
-            }
-            return eval_scope(&frozenv, bindm);
-        },
+        Frozen::Scope(fv) | Frozen::Bracket(fv) => eval_scope(&fv, bindm),
         Frozen::FuncDef(fd) => {
             let mut bm = bindm.clone();
             let mut w_func = T::null();
@@ -558,9 +554,31 @@ mod tests {
     use super::*;
 
     #[test]
-    fn tokenize_test1() {
+    fn eval_test1() {
         let s1 = "if (let s = {}) in {{}} then s else {s}".to_string();
         let s2 = "{}".to_string();
         assert_eq!(eval_line(&s1, &Bind::new()), eval_line(&s2, &Bind::new()));
+    }
+
+    #[test]
+    fn eval_test2() {
+        let s1 = "$(let s = {} | {s})".to_string();
+        let s2 = "{{}}".to_string();
+        assert_eq!(eval_line(&s1, &Bind::new()), eval_line(&s2, &Bind::new()));
+    }
+
+    #[test]
+    fn eval_test3() {
+        let (_, bm) = eval_line(&"def f: Set -> Set; s -> s + {s}".to_string(), &Bind::new()).unwrap();
+        let (w1, _) = eval_line(&"f({})".to_string(), &bm).unwrap();
+        let (w2, _) = eval_line(&"{{}}".to_string(), &Bind::new()).unwrap();
+        assert_eq!(w1, w2);
+    }
+
+    #[test]
+    fn eval_test4() {
+        let s1 = "$(def not: Bool -> Bool; b -> !b | not(true))".to_string();
+        let (w1, _) = eval_line(&s1, &Bind::new()).unwrap();
+        assert_eq!(w1, Word::Bool(false));
     }
 }
