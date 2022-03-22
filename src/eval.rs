@@ -216,6 +216,12 @@ fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>
 
     let mut bm = bindm.clone();
     for frozen in frozenv_def {
+        if let Frozen::FuncDef(fd) = frozen.clone() {
+            if bm.get(&fd.name.clone().unwrap()) != None {
+                return Err(format!("Token '{}' is already reserved as identifier", fd.name.clone().unwrap()));
+            }
+        }
+        
         let (_, bm1) = eval(frozen, &bm)?;
         bm = bm1;
     }
