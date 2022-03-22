@@ -486,9 +486,9 @@ impl fmt::Display for WordType {
     fn fmt(&self, f: &mut fmt::Formatter) -> fmt::Result {
         match self {
             WordType::Set => write!(f, "Set"),
-            WordType::Keyword(_) => write!(f, "Keyword"),
-            WordType::Symbol(_) => write!(f, "Symbol"),
-            WordType::Identifier(_) => write!(f, "Identifier"),
+            WordType::Keyword(kw) => write!(f, "{}", kw),
+            WordType::Symbol(sym) => write!(f, "{}", sym),
+            WordType::Identifier(id) => write!(f, "{}", id),
             WordType::Bool => write!(f, "Bool"),
             WordType::Null => write!(f, "Null"),
             WordType::Frozen(_) => write!(f, "Frozen"),
