@@ -185,12 +185,20 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
             let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm1)?;
             let wt = w.get_type();
             if wt != fd.rett {
-                return Err(format!(
-                    "Type error: Return type of function {:?} doesn't match the signature. Expected {}, got {}.",
-                    fd.name.clone(),
-                    fd.rett.clone(),
-                    wt
-                ));
+                if let Some(name) = &fd.name {
+                    return Err(format!(
+                        "Type error: Return type of function '{}' doesn't match the signature. Expected {}, got {}.",
+                        name,
+                        fd.rett.clone(),
+                        wt
+                    ));
+                } else {
+                    return Err(format!(
+                        "Type error: Return type of anonymous function doesn't match the signature. Expected {}, got {}.",
+                        fd.rett.clone(),
+                        wt
+                    ));    
+                }
             }
         }
     }
