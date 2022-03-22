@@ -67,3 +67,36 @@ impl Token {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenize_test1() {
+        let s = "let s = {}".to_string();
+        assert_eq!(Token::tokenize(&s),
+            Ok(vec![
+                Token::Keyword("let"),
+                Token::Identifier("s".to_string()),
+                Token::Symbol("="),
+                Token::Symbol("{"),
+                Token::Symbol("}")
+            ])
+        );
+    }
+
+    #[test]
+    fn tokenize_test2() {
+        let s = "print is_empty(s)".to_string();
+        assert_eq!(Token::tokenize(&s),
+            Ok(vec![
+                Token::Keyword("print"),
+                Token::Keyword("is_empty"),
+                Token::Symbol("("),
+                Token::Identifier("s".to_string()),
+                Token::Symbol(")"),
+            ])
+        );
+    }
+}
