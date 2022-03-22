@@ -3,7 +3,7 @@ mod word_and_operator;
 pub use self::word_and_operator::*;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bind<T: Clone> {
     map: std::collections::HashMap<String, T>,
     funcmap: std::collections::HashMap<String, T>,
@@ -551,4 +551,16 @@ pub fn eval_main(string: &String) -> Result<(), String> {
     }
 
     return Ok(());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenize_test1() {
+        let s1 = "if (let s = {}) in {{}} then s else {s}".to_string();
+        let s2 = "{}".to_string();
+        assert_eq!(eval_line(&s1, &Bind::new()), eval_line(&s2, &Bind::new()));
+    }
 }

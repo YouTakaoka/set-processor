@@ -88,7 +88,7 @@ mod tests {
 
     #[test]
     fn tokenize_test2() {
-        let s = "print is_empty(s)".to_string();
+        let s = "print is_empty(s)  %hoge".to_string();
         assert_eq!(Token::tokenize(&s),
             Ok(vec![
                 Token::Keyword("print"),

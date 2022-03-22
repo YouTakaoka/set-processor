@@ -39,7 +39,7 @@ pub trait WordKind<T: Clone + fmt::Display + PartialEq> {
     fn find_bracket(wordv: &Vec<T>, tb: Self, te: Self) -> Result<Option<(usize, usize)>, String>;
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Word {
     Set(Set),
     Keyword(&'static str),
@@ -287,7 +287,7 @@ impl WordKind<Word> for Word {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum WordType {
     Set,
     Keyword(&'static str),
@@ -655,7 +655,7 @@ pub fn subst_range<T: Clone>(wordv: &Vec<T>, i1: usize, i2: usize, word: T) -> V
     return wv;
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Env {
     Line,
     Main,
@@ -689,7 +689,7 @@ impl fmt::Display for Env {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Frozen<T> {
     WordList(FrozenWordList<T>),
     IfExpr(IfExpr<T>),
@@ -752,7 +752,7 @@ impl Frozen<Word> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct FuncDef<T> {
     pub name: Option<String>,
     pub argtv: Vec<WordType>,
@@ -773,7 +773,7 @@ impl FuncDef<Word> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct IfExpr<T> {
     pub wv_if: Vec<T>,
     pub wv_then: Vec<T>,
@@ -790,7 +790,7 @@ impl IfExpr<Word> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct LetExpr<T> {
     pub identifier: String,
     pub expr: Vec<T>,
@@ -805,7 +805,7 @@ impl LetExpr<Word> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct FrozenWordList<T> {
     contents: Vec<T>,
     env: Env,
@@ -1062,7 +1062,7 @@ fn parse_funcdef<T: WordKind<T> + Clone + fmt::Display + PartialEq>
 //            ここからOperator, PresetFunction
 //------------------------------------------------
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct BinarySig {
     args: (WordType, WordType),
     ret: WordType,
@@ -1074,7 +1074,7 @@ impl BinarySig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct BinaryOp<T> {
     name: String,
     fs: Vec<(BinarySig, fn(T, T) -> Result<T, String>)>,
@@ -1145,7 +1145,7 @@ impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> BinaryOp<T> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct UnarySig {
     arg: WordType,
     ret: WordType,
@@ -1157,7 +1157,7 @@ impl UnarySig {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct UnaryOp<T> {
     name: String,
     fs: Vec<(UnarySig, fn(T) -> Result<T, String>)>,
@@ -1475,7 +1475,7 @@ pub fn preset_operators<T: WordKind<T> + Clone + PartialEq + fmt::Display>() -> 
     return opnames.into_iter().zip(opv.into_iter()).collect();
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub enum Operator<T> {
     BinaryOp(BinaryOp<T>),
     UnaryOp(UnaryOp<T>),
@@ -1529,7 +1529,7 @@ impl<T: WordKind<T> + Clone + fmt::Display + PartialEq> Operator<T> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub enum Function<T: Clone + PartialEq> {
     Preset(PresetFunction<T>),
     User(UserFunction<T>),
@@ -1578,7 +1578,7 @@ impl Function<Word> {
     }
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct PresetFunction<T: Clone + PartialEq> {
     name: Option<String>,
     f: fn(Vec<T>) -> Result<T, String>,
@@ -1646,7 +1646,7 @@ pub fn preset_functions() -> std::collections::HashMap<String, PresetFunction<Wo
     return funcnames.into_iter().zip(funcv.into_iter()).collect();
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct Signature {
     pub args: Vec<WordType>,
     pub ret: WordType,
@@ -1676,7 +1676,7 @@ pub fn vec_to_string<T: ToString>(vec: Vec<T>) -> String {
     return string;
 }
 
-#[derive(Clone, PartialEq)]
+#[derive(Clone, PartialEq, Debug)]
 pub struct UserFunction<T: Clone + PartialEq> {
     name: Option<String>,
     sig: Signature,
