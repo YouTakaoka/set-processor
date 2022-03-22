@@ -980,7 +980,7 @@ impl<T: Clone + PartialEq + fmt::Display + WordKind<T>> FrozenWordList<T> {
             }
         }
     
-        panic!("Unrecognized 'keyword': {}", keyword);
+        return Err(format!("Keyword '{}' cannot be the initial token of statement.", keyword));
     }
 }
 

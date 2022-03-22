@@ -66,7 +66,7 @@ fn substitute<T: Clone + WordKind<T> + fmt::Display + PartialEq>(word: &T, bindm
             return Ok(Some(w.clone()));
         }
         // Identifierにも関わらずbindmになければError
-        return Err(format!("Parse error: Undefined token: {}", word.to_string()))
+        return Err(format!("Parse error: Undefined token: '{}'", word.to_string()))
     }
     return Ok(None);
 }
