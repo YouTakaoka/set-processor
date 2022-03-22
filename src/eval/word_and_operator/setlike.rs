@@ -72,7 +72,7 @@ impl SetList {
     }
 }
 
-#[derive(Clone)]
+#[derive(Clone, Debug)]
 pub struct Set {
     contents: Vec<Set>,
 }

@@ -3,7 +3,7 @@ mod word_and_operator;
 pub use self::word_and_operator::*;
 use std::fmt;
 
-#[derive(Clone)]
+#[derive(Clone, Debug, PartialEq)]
 pub struct Bind<T: Clone> {
     map: std::collections::HashMap<String, T>,
     funcmap: std::collections::HashMap<String, T>,
@@ -66,7 +66,7 @@ fn substitute<T: Clone + WordKind<T> + fmt::Display + PartialEq>(word: &T, bindm
             return Ok(Some(w.clone()));
         }
         // Identifierにも関わらずbindmになければError
-        return Err(format!("Parse error: Undefined token: {}", word.to_string()))
+        return Err(format!("Parse error: Undefined token: '{}'", word.to_string()))
     }
     return Ok(None);
 }
@@ -185,12 +185,20 @@ fn return_type_check<T: Clone + PartialEq + WordKind<T> + fmt::Display>
             let (w, _) = eval(T::vec_to_frozen(expr, &Env::Line)?, &bm1)?;
             let wt = w.get_type();
             if wt != fd.rett {
-                return Err(format!(
-                    "Type error: Return type of function {:?} doesn't match the signature. Expected {}, got {}.",
-                    fd.name.clone(),
-                    fd.rett.clone(),
-                    wt
-                ));
+                if let Some(name) = &fd.name {
+                    return Err(format!(
+                        "Type error: Return type of function '{}' doesn't match the signature. Expected {}, got {}.",
+                        name,
+                        fd.rett.clone(),
+                        wt
+                    ));
+                } else {
+                    return Err(format!(
+                        "Type error: Return type of anonymous function doesn't match the signature. Expected {}, got {}.",
+                        fd.rett.clone(),
+                        wt
+                    ));    
+                }
             }
         }
     }
@@ -216,6 +224,12 @@ fn compile_defs<T: Clone + WordKind<T> + PartialEq + fmt::Display>
 
     let mut bm = bindm.clone();
     for frozen in frozenv_def {
+        if let Frozen::FuncDef(fd) = frozen.clone() {
+            if bm.get(&fd.name.clone().unwrap()) != None {
+                return Err(format!("Token '{}' is already reserved as identifier", fd.name.clone().unwrap()));
+            }
+        }
+        
         let (_, bm1) = eval(frozen, &bm)?;
         bm = bm1;
     }
@@ -537,4 +551,16 @@ pub fn eval_main(string: &String) -> Result<(), String> {
     }
 
     return Ok(());
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn tokenize_test1() {
+        let s1 = "if (let s = {}) in {{}} then s else {s}".to_string();
+        let s2 = "{}".to_string();
+        assert_eq!(eval_line(&s1, &Bind::new()), eval_line(&s2, &Bind::new()));
+    }
 }
